@@ -23,6 +23,8 @@ import cfg.nodes.CFGExceptionNode;
 import cfg.nodes.CFGExitNode;
 import cfg.nodes.CFGNode;
 
+import databaseNodes.EdgeTypes;
+
 public class PHPCFGFactory extends CFGFactory {
 	
 	// node id offsets for entry and exit nodes of function definitions
@@ -133,12 +135,12 @@ public class PHPCFGFactory extends CFGFactory {
 				// convert case block and add to main switch block
 				CFG caseBody = convert(switchCase.getStatement());
 				switchBlock.appendCFG(caseBody);
-				
+			
 				// determine label
 				String label = switchCase.getValue() != null
 						? switchCase.getValue().getEscapedCodeStr()
 						: "default";
-				if( label.equals("default")) defaultExists = true;
+				if( label != null && label.equals("default")) defaultExists = true;
 				
 				// connect condition to first statement of case
 				// if case is empty, simply connect to current exit node
@@ -163,7 +165,7 @@ public class PHPCFGFactory extends CFGFactory {
 		}
 		catch (Exception e)
 		{
-			//e.printStackTrace();
+			e.printStackTrace();
 			return newErrorInstance();
 		}
 	}
@@ -177,7 +179,7 @@ public class PHPCFGFactory extends CFGFactory {
 			// TODO actually, it would be nicer to have the ForEachCondition explicitly
 			// be a part of the AST
 			CFGNode conditionContainer = new ASTNodeContainer(
-					forEachStatement.getCondition().getIteratedObject());
+					forEachStatement); //.getCondition()); //.getIteratedObject());
 			forEachBlock.addVertex(conditionContainer);
 			forEachBlock.addEdge(forEachBlock.getEntryNode(), conditionContainer);
 

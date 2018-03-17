@@ -15,7 +15,6 @@ public class AssignmentEnvironment extends UseDefEnvironment
 	public void addChildSymbols( LinkedList<String> childSymbols, ASTProvider child)
 	{
 		this.symbols.addAll( childSymbols);
-			
 		// additionally collect defs and uses symbols in separate lists,
 		// to be used for useOrDefsFromSymbols
 		if( isDef( child))

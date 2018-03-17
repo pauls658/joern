@@ -1,3 +1,6 @@
+#!/bin/bash
+
+
 # How to take a bunch of PHP files, calculate ASTs, CFGs, PDGs and CGs
 # and get them into a Neo4J database.
 ######################################################################
@@ -8,20 +11,62 @@
 # $JEXP_HOME = the directory of your batch-import installation
 # $JOERN = the directory your joern installation
 
+if [[ -z $1 ]]; then
+	echo "which command to run? 1, 2, 3, or 4"
+	exit 1
+fi
+if [[ -z $2 ]]; then
+	echo "which app to run on?"
+	exit 1
+fi
+
+PHPJOERN=/home/brandon/phpjoern
+PHPINPUT=/home/brandon/php_apps/$2
+JEXP_HOME=/home/brandon/batch-import
+JOERN=/home/brandon/joern
+
 # Generate node and edge files using phpjoern parser.
 
-$PHPJOERN/php2ast -f jexp -n nodes.csv -r edges.csv $PHPINPUT
+if [[ "$1" == "1" ]]; then
+	$PHPJOERN/php2ast -f neo4j -n nodes.csv -r edges.csv $PHPINPUT
+fi
 
 # Use Joern to generate CFG, PDG and CG edges and export them
 
-cd $JOERN; ./build.sh
-$JOERN/phpast2cpg nodes.csv edges.csv
+if [[ "$1" == "2" ]]; then
+	cd $JOERN; ./build.sh; cd -
+fi
+if [[ "$1" == "3" ]]; then
+	echo "Building jexp AST"
+	$PHPJOERN/php2ast -f jexp -n nodes.csv -r edges.csv $PHPINPUT 2> /dev/null
+	$JOERN/phpast2cpg  nodes.csv edges.csv
+	sed -i "1s/.*/:START_ID,:END_ID,:TYPE,var,childnum:int/" cpg_edges.csv
+	sed -i "s/	/,/g" cpg_edges.csv
+	echo "Building neo4j AST"
+	$PHPJOERN/php2ast -f neo4j -n nodes.csv -r edges.csv $PHPINPUT 2> /dev/null
+	chmod 0777 new_props.csv
+fi
 
 # Joern generates the file cfg_ddg_edges.csv in the current
 # directory. We thus now have one nodes file and two edges files,
 # and we can import them into a Neo4J database.
 
-java -classpath "$JEXP_HOME/lib/*" -Dfile.encoding=UTF-8 org.neo4j.batchimport.Importer $PHPJOERN/conf/batch.properties graph.db nodes.csv edges.csv,cpg_edges.csv
+if [[ "$1" == "4" ]]; then
+	#java -classpath "$JEXP_HOME/lib/*" -Dfile.encoding=UTF-8 org.neo4j.batchimport.Importer $PHPJOERN/conf/batch.properties -db-directory graph.db -nodes nodes.csv -rels edges.csv,cpg_edges.csv
+	service neo4j stop
+	rm -rf /var/lib/neo4j/data/databases/cur.db/
+	neo4j-admin import --database cur.db --nodes nodes.csv --relationships edges.csv --relationships cpg_edges.csv
+	chown -R neo4j:adm /var/lib/neo4j/data/databases/cur.db
+	service neo4j start
+	sleep 3
+	cat add_global_defs.cypher | cypher-shell -u neo4j -p " "
+fi
+
+if [[ "$1" == "5" ]]; then
+	cd /home/brandon/python-joern/dataflows
+	./all.sh
+	cd -
+fi
 
 # Point your Neo4J 2.1.8 installation with the neo4j-contrib Gremlin plugin
 # to the database you just created, start the server, and rejoice! :-)

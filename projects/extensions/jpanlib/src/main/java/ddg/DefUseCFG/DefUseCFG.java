@@ -99,11 +99,11 @@ public class DefUseCFG
 
 	public void addUsesForExitNode()
 	{
-
+		
 		for (String symbol : parameters)
 		{
-			// this.addSymbolUsed(exitNode, symbol);
-			this.addSymbolUsed(exitNode, "* " + symbol);
+			this.addSymbolUsed(exitNode, symbol);
+			//this.addSymbolUsed(exitNode, "* " + symbol);
 		}
 	}
 

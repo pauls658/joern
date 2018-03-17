@@ -164,6 +164,7 @@ public class PHPCSVNodeTypes
 	public static final String TYPE_TRY = "AST_TRY";
 	public static final String TYPE_CATCH = "AST_CATCH";
 	public static final String TYPE_PARAM = "AST_PARAM";
+	public static final String TYPE_THIS_PARAM = "AST_THIS_PARAM";
 
 	// nodes with exactly 4 children
 	// statements

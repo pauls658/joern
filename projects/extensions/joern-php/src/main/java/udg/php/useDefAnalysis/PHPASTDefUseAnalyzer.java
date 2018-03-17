@@ -14,7 +14,9 @@ import udg.php.useDefAnalysis.environments.ConstantEnvironment;
 import udg.useDefAnalysis.ASTDefUseAnalyzer;
 import udg.useDefAnalysis.environments.EmitDefEnvironment;
 import udg.useDefAnalysis.environments.EmitUseEnvironment;
+import udg.useDefAnalysis.environments.EmitDefAndUseEnvironment;
 import udg.php.useDefAnalysis.environments.FieldDeclarationEnvironment;
+import udg.php.useDefAnalysis.environments.FunctionCallEnvironment;
 import udg.php.useDefAnalysis.environments.ForEachEnvironment;
 import udg.php.useDefAnalysis.environments.IncDecEnvironment;
 import udg.php.useDefAnalysis.environments.ParameterEnvironment;
@@ -65,7 +67,6 @@ public class PHPASTDefUseAnalyzer extends ASTDefUseAnalyzer
 	protected UseDefEnvironment createUseDefEnvironment(ASTProvider astProvider)
 	{
 		String nodeType = astProvider.getTypeAsString();
-
 		switch (nodeType)
 		{
 			// environments that need to "cleverly" decide which of its children symbols
@@ -153,10 +154,6 @@ public class PHPASTDefUseAnalyzer extends ASTDefUseAnalyzer
 			// (1) assume DEFs *and* USEs for all variables in a function call (over-approximation -> more false positives)
 			// (2) assume *only* USEs for all variables in a function call (under-approximation -> more false negatives)
 			// Here we go for (2).
-			case "CallExpressionBase":
-			case "NewExpression":
-			case "MethodCallExpression":
-			case "StaticCallExpression":
 			// the following environments should also emit USEs, as they could
 			// be used as standalone expressions as a predicate, i.e., within
 			// the guard of some if/while/etc. statement
@@ -164,6 +161,12 @@ public class PHPASTDefUseAnalyzer extends ASTDefUseAnalyzer
 			case "BinaryOperationExpression":
 			case "InstanceofExpression":
 				return new EmitUseEnvironment();
+			case "CallExpressionBase":
+			case "MethodCallExpression":
+			case "StaticCallExpression":
+			case "NewExpression":
+				//return new EmitUseEnvironment();
+				return new FunctionCallEnvironment();
 
 
 			// environments that emit DEFs for all their children symbols

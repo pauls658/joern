@@ -10,6 +10,9 @@ import udg.ASTProvider;
 import udg.useDefAnalysis.environments.UseDefEnvironment;
 import udg.useDefGraph.UseOrDef;
 
+import udg.ASTNodeASTProvider;
+import ast.ASTNode;
+
 /**
  * The ASTDefUseAnalyzer determines symbol uses and definitions performed in a
  * given AST. It is currently run on statement ASTs as the core step in the
@@ -43,6 +46,10 @@ public abstract class ASTDefUseAnalyzer
 	 */
 	protected void traverseAST(ASTProvider astProvider)
 	{
+		if (astProvider instanceof ASTNodeASTProvider)
+			if (((ASTNodeASTProvider)astProvider).getASTNode().getNodeId() == 740)
+				System.out.println("");
+
 		UseDefEnvironment env = createUseDefEnvironment(astProvider);
 		env.setASTProvider(astProvider);
 

@@ -22,7 +22,7 @@ public abstract class CSVWriterImpl implements WriterImpl {
 			NodeKeys.BASE_TYPE, NodeKeys.COMPLETE_TYPE, NodeKeys.IDENTIFIER
 	};
 
-	final String[] edgeProperties = { EdgeKeys.VAR };
+	final String[] edgeProperties = { EdgeKeys.VAR, "childnum" };
 
 	long lastNodeId = 0;
 

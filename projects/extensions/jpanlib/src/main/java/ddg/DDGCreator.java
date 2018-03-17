@@ -14,11 +14,13 @@ public class DDGCreator
 	DefUseCFG cfg;
 
 	HashMapOfSets in = new HashMapOfSets();
+
+	/* Has symbols used for statements. */
 	HashMapOfSets out = new HashMapOfSets();
 	HashMapOfSets gen = new HashMapOfSets();
 	HashSet<Object> changedNodes;
 
-	private class Definition
+	public class Definition
 	{
 		public Definition(Object aStatement, String aIdentifier)
 		{
@@ -120,7 +122,7 @@ public class DDGCreator
 
 		in.removeAllForKey(x);
 
-		// in(x) = union(out(p))_{p in parents(x)}
+		//in(x) = union(out(p))_{p in parents(x)}
 		for (Object parent : parents)
 		{
 			HashSet<Object> parentOut = out.getListForKey(parent);
@@ -177,7 +179,7 @@ public class DDGCreator
 		return !oldOut.equals(out.getListForKey(x));
 	}
 
-	private DDG createDDGFromReachingDefs()
+	public DDG createDDGFromReachingDefs()
 	{
 		DDG ddg = new DDG();
 

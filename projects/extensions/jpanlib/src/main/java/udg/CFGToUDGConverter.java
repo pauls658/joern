@@ -48,7 +48,7 @@ public class CFGToUDGConverter
 		return useDefGraph;
 	}
 
-	private void addToUseDefGraph(UseDefGraph useDefGraph,
+	protected void addToUseDefGraph(UseDefGraph useDefGraph,
 			Collection<UseOrDef> usesAndDefs, ASTNode statementNode)
 	{
 		HashSet<String> insertedForStatementDef = new HashSet<String>();

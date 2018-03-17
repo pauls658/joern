@@ -12,8 +12,9 @@ import cfg.PHPCFGFactory;
 import cg.CG;
 import cg.PHPCGFactory;
 import ddg.CFGAndUDGToDefUseCFG;
-import ddg.DDGCreator;
-import ddg.DataDependenceGraph.DDG;
+//import ddg.DDGCreator;
+import ddg.PHPDDGCreator;
+import ddg.DataDependenceGraph.PHPDDG;
 import ddg.DefUseCFG.DefUseCFG;
 import inputModules.csv.KeyedCSV.exceptions.InvalidCSVFile;
 import inputModules.csv.csvFuncExtractor.CSVFunctionExtractor;
@@ -21,11 +22,19 @@ import outputModules.common.Writer;
 import outputModules.csv.MultiPairCSVWriterImpl;
 import outputModules.csv.exporters.CSVCFGExporter;
 import outputModules.csv.exporters.CSVCGExporter;
-import outputModules.csv.exporters.CSVDDGExporter;
-import udg.CFGToUDGConverter;
+//import outputModules.csv.exporters.CSVDDGExporter;
+import outputModules.csv.exporters.PHPCSVDDGExporter;
+//import udg.CFGToUDGConverter;
 import udg.php.useDefAnalysis.PHPASTDefUseAnalyzer;
-import udg.useDefGraph.UseDefGraph;
+//import udg.useDefGraph.UseDefGraph;
 
+import ast.ASTNode;
+
+import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.Map;
+
+import java.io.*;
 public class Main {
 
 	// command line interface
@@ -35,16 +44,16 @@ public class Main {
 	static CSVFunctionExtractor extractor = new CSVFunctionExtractor();
 	//static PHPCFGFactory cfgFactory = new PHPCFGFactory();
 	static ASTToCFGConverter ast2cfgConverter = new ASTToCFGConverter();
-	static CFGToUDGConverter cfgToUDG = new CFGToUDGConverter();
+	static PHPCFGToUDGConverter cfgToUDG = new PHPCFGToUDGConverter();
 	static CFGAndUDGToDefUseCFG udgAndCfgToDefUseCFG = new CFGAndUDGToDefUseCFG();
-	static DDGCreator ddgCreator = new DDGCreator();
+	static PHPDDGCreator ddgCreator = new PHPDDGCreator();
 
 	// exporters
 	static CSVCFGExporter csvCFGExporter = new CSVCFGExporter();
-	static CSVDDGExporter csvDDGExporter = new CSVDDGExporter();
+	static PHPCSVDDGExporter csvDDGExporter = new PHPCSVDDGExporter();
 	static CSVCGExporter csvCGExporter = new CSVCGExporter();
 
-	public static void main(String[] args) throws InvalidCSVFile, IOException {
+	public static void main(String[] args) throws InvalidCSVFile, IOException, InterruptedException {
 
 		// parse command line
 		parseCommandLine(args);
@@ -68,19 +77,58 @@ public class Main {
 		csvWriter.openEdgeFile( ".", "cpg_edges.csv");
 		Writer.setWriterImpl( csvWriter);
 
+
+		HashMap<String, LinkedList<ASTNode>> globalNameToBB = new HashMap<String, LinkedList<ASTNode>>();
+		LinkedList<Tuple<String, ASTNode>> defBBs = new LinkedList<Tuple<String, ASTNode>>();
+		int numGlobalNodes = 0;
 		// let's go...
 		FunctionDef rootnode;
 		while ((rootnode = (FunctionDef)extractor.getNextFunction()) != null) {
 
 			PHPCGFactory.addFunctionDef( rootnode);
 
+			// convert() just calls newInstance() of PHPCFGFactory
 			CFG cfg = ast2cfgConverter.convert(rootnode);
 			csvCFGExporter.writeCFGEdges(cfg);
 
-			UseDefGraph udg = cfgToUDG.convert(cfg);
-			DefUseCFG defUseCFG = udgAndCfgToDefUseCFG.convert(cfg, udg);
-			DDG ddg = ddgCreator.createForDefUseCFG(defUseCFG);
-			csvDDGExporter.writeDDGEdges(ddg);
+			PHPUseDefGraph udg = cfgToUDG.convert(cfg);
+			for (Map.Entry<String, LinkedList<ASTNode>> entry : udg.getMap().entrySet()) {
+				LinkedList<ASTNode> bbs = globalNameToBB.get(entry.getKey());
+				if (bbs == null) {
+					bbs = new LinkedList<ASTNode>();
+					globalNameToBB.put(entry.getKey(), bbs);
+				}
+				bbs.addAll(entry.getValue());
+				numGlobalNodes++;
+			}
+
+			defBBs.addAll(udg.getGlobalDefs());
+			DefUseCFG defUseCFG = udgAndCfgToDefUseCFG.convert(cfg, udg); // nothing really useful done here, just an "easier format" for finding reaching defs
+			PHPDDG ddg = (PHPDDG) ddgCreator.createForDefUseCFG(defUseCFG);
+			csvDDGExporter.writeDDGEdges(ddg, udg.nameToParamNode);
+		}
+
+		FileOutputStream newPropsFile = new FileOutputStream("new_props.csv");
+		newPropsFile.write(("id,globalName\n").getBytes());
+		int count = 0, edgecount = 0;
+		//System.out.println("Number global nodes: " + numGlobalNodes +  ", Number BB defs: " + defBBs.size());
+		for (Tuple<String, ASTNode> def : defBBs) {
+			String globalName = def.x;
+			ASTNode BB = def.y;
+			newPropsFile.write((BB.getNodeId() + "," + globalName + "\n").getBytes());
+			/*
+			//LinkedList<ASTNode> globalNodes = globalNameToBB.get(globalName);
+			//System.out.println("Processing " + globalName + "th node with " + globalNodes.size() + " global nodes");
+			count++;
+			String id2 = BB.getProperty("funcid");
+			for (ASTNode globalNode : globalNodes) {
+				String id1 = globalNode.getProperty("funcid");
+				if (id1 instanceof String && id2 instanceof String && !id1.equals(id2)) {
+					ddg.add(BB, globalNode, globalName);
+					edgecount++;
+				}
+			}
+			*/
 		}
 
 		// now that we wrapped up all functions, let's finish off with the call graph
