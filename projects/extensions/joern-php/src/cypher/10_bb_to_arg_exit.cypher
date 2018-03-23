@@ -7,4 +7,4 @@ where
 r.childnum = aexit.childnum 
 
 create 
-(bb)-[:INTERPROC{call_id: aexit.call_id}]->(aexit);
+(bb)-[:INTERPROC{call_id: aexit.call_id, type: aexit.type}]->(aexit);

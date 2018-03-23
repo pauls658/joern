@@ -1,1 +1,1 @@
-match (a)-[:FLOWS_TO]-(b) set a:BB, b:BB;
+match (a:AST)-[:FLOWS_TO]-(b:AST) set a:BB, b:BB;

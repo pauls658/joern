@@ -6,4 +6,4 @@ where
 a.childnum = p.childnum 
 
 create 
-(a)-[:INTERPROC{call_id:a.call_id}]->(p);
+(a)-[:INTERPROC{call_id:a.call_id, type:a.type}]->(p);

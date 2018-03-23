@@ -9,4 +9,4 @@ where
 name.code = parentclass.name 
 
 create 
-(childclass)-[:REACHES{var: "this"}]->(parentclass);
+(childclass)-[:INTERPROC{var: "this", type: "extends"}]->(parentclass);
