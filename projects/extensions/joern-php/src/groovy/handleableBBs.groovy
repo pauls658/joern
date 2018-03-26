@@ -82,6 +82,15 @@ class G {
 		"AST_CLASS"
 	]
 
+	def getVarPaths(id) {
+		g\
+		.V(id)\
+		repeat(
+			out('PARENT_OF').has("type", without(stopTypes))
+		).until(has("type", "AST_VAR").out('PARENT_OF').has("type", "string")).path().toList()
+
+	}
+
 	public canHandleCache = [:];
  
     def canHandle(BB) {
@@ -91,12 +100,7 @@ class G {
 		if (BB.id() in canHandleCache)
 			return canHandleCache[BB.id()];
 
-		def var_paths = g\
-		.V(BB.id())\
-		repeat(
-			out('PARENT_OF').has("type", without(stopTypes))
-		).until(has("type", "AST_VAR").out('PARENT_OF').has("type", "string")).path().toList()
-
+		def var_paths = getVarPaths(BB.id());
 		for (path in var_paths) {
 			for (v in path) {
 				if (!canHandleAST(v)) {
@@ -168,8 +172,6 @@ class G {
     	}
     
     	SackObject addVisited(Long id) {
-			if (id == 732)
-				println "Adding 732"
     		visited.add(id);
     		return this;
     	}
@@ -186,6 +188,18 @@ class G {
     		return "Stack: " + stack.toString();
     	}
     }
+
+	def simpleBackTrav(start, subgraphV) {
+		def visited = [] as HashSet;
+		g\
+		.withSack{visited}\
+		.V(start)\
+		.repeat(
+			sack{m, v -> m.add(v.id()); m}\
+			.union(__.in('REACHES'), __.in('INTERPROC'))
+		).until(filter{it.get().id() in visited || !(it.get().id() in subgraphV)})\
+		.sack().toList()[0]
+	}
 
     class FSackObject extends SackObject {
     	public HashSet<Long> echos;
@@ -343,6 +357,78 @@ class G {
 		HashSet<Long> sensitiveReachable = fsack.visited;
 
 		BSackObject bsack = backwardTrav(fsack.echos, sensitiveReachable);
-		return bsack;
+
+		HashSet<Long> intersection = sensitiveReachable.intersect(bsack.visited);
+
+		HashSet<Long> n1 = simpleBackTrav(bsack.nset, intersection);
+		HashSet<Long> n2 = intersection.minus(n1);
+
+		def taint = g.V(n1).union(out('REACHES'), out('INTERPROC')).id().is(within(n2)).toSet();
+
+		def untaint = g.V(n2).union(out('REACHES'), out('INTERPROC')).id().is(without(n2)).toSet();
+
+		def propogate = n2.minus(taint);
+
+		return [taint, untaint, propogate];
+	}
+
+	def varTypes = [
+		"AST_VAR",
+		"string",
+		"AST_DIM"
+	] as HashSet;
+
+	def findVarTop(path) {
+		def i = path.size() - 1;
+		while (i >= 0) {
+			if (path[i].value("type") in varTypes)
+				i--;
+			else
+				break;
+		}
+		return path[i - 1].id();
+	}
+
+	def getRightVarPaths(id) {
+		g\
+		.V(id).out('PARENT_OF').has("childnum", 1)\
+		repeat(
+			out('PARENT_OF').has("type", without(stopTypes))
+		).until(has("type", "AST_VAR").out('PARENT_OF').has("type", "string"))\
+		.path().toList()
+	}
+
+	// should return a list of tuples
+	// first item should be the instrumentation type
+	// following items should be the info we need
+	def writeInstrumentations(taint, untaint, propogate) {
+		def outFile = new File("/home/brandon/instrumentations.csv");
+		outFile.createNewFile();
+		for (id in taint) {
+			def var_paths = getRightVarPaths(id);
+			for (path in var_paths) {
+				def instrId = findVarTop(path);
+				outFile << "taint," + instrId;
+			}
+		}
+	}
+
+	def main() {
+		def (taint, untaint, propogate) = analysis();
+
+		def outFile = new File("/home/brandon", "taint.ids");
+		outFile.createNewFile();
+		for (id in taint)
+			outFile << id + "\n";
+
+		outFile = new File("/home/brandon", "untaint.ids");
+		outFile.createNewFile();
+		for (id in untaint)
+			outFile << id + "\n";
+
+		outFile = new File("/home/brandon", "propogate.ids");
+		outFile.createNewFile();
+		for (id in propogate)
+			outFile << id + "\n";
 	}
 }
