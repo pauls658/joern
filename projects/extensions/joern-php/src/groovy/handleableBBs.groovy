@@ -1,3 +1,5 @@
+import java.nio.file.Files;
+
 class G {
    	public GraphTraversalSource g = Neo4jGraph.open("/var/lib/neo4j/data/databases/cur.db/").traversal();
     
@@ -113,10 +115,6 @@ class G {
 		canHandleCache[BB.id()] = true;
 		return true;
     }
-
-	def setCanHanle(BBid) {
-		
-	}
 
 	def labelHandleableFromFile(String filename) {
 		File f = new File(filename);
@@ -386,7 +384,7 @@ class G {
 			else
 				break;
 		}
-		return path[i - 1].id();
+		return path[i + 1].id();
 	}
 
 	def getRightVarPaths(id) {
@@ -402,20 +400,42 @@ class G {
 	// first item should be the instrumentation type
 	// following items should be the info we need
 	def writeInstrumentations(taint, untaint, propogate) {
-		def outFile = new File("/home/brandon/instrumentations.csv");
+		def outFile = new File("/home/brandon/taint.csv");
+		Files.deleteIfExists(outFile.toPath());
 		outFile.createNewFile();
+		outFile << "id\n";
 		for (id in taint) {
 			def var_paths = getRightVarPaths(id);
 			for (path in var_paths) {
 				def instrId = findVarTop(path);
-				outFile << "taint," + instrId;
+				outFile << instrId + "\n";
 			}
 		}
+
+		// TODO: propogate
+		// as of right now we don't handle any special cases
+
+		outFile = new File("/home/brandon/untaint.csv");
+		Files.deleteIfExists(outFile.toPath());
+		outFile.createNewFile();
+		outFile << "id\n";
+		for (id in untaint) {
+			def var_paths = getRightVarPaths(id);
+			for (path in var_paths) {
+				def instrId = findVarTop(path);
+				outFile << instrId + "\n";
+			}
+		}
+
 	}
 
 	def main() {
 		def (taint, untaint, propogate) = analysis();
+		writeInstrumentations(taint, untaint, propogate);
+	}
 
+	// for debugging
+	def writeAnalysisRes(taint, untaint, propogate) {
 		def outFile = new File("/home/brandon", "taint.ids");
 		outFile.createNewFile();
 		for (id in taint)
