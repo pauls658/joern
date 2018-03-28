@@ -1,6 +1,6 @@
 <?php
 
-require __DIR__ . "/vendor/autoload.php";
+require 'AstReverter.php';
 include '/home/brandon/php-ast/util.php';
 
 $code = <<<'end'
@@ -36,17 +36,17 @@ end;
 
 $code = <<<'end'
 <?php
-
-$dependency_definitions = array(
-    'url_query' => &$url_query
-);
-
+echo "\*";
+echo "\n";
+echo '"';
+echo '$';
+echo "$";
 end;
 
 $ast = ast\parse_code($code, $version=40);
 
 echo ast_dump($ast), "\n";
 
-//echo (new AstReverter\AstReverter)->getCode($ast);
+echo (new AstReverter\AstReverter)->getCode($ast);
 
 ?>
