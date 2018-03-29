@@ -36,11 +36,7 @@ end;
 
 $code = <<<'end'
 <?php
-echo "\*";
-echo "\n";
-echo '"';
-echo '$';
-echo "$";
+if (($j = strpos($str, 'y')) || ($j = strpos($str, 'e'))) {}
 end;
 
 $ast = ast\parse_code($code, $version=40);

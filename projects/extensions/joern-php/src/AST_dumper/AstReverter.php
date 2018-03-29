@@ -496,7 +496,9 @@ class AstReverter
             if (
                 $enforcePrecendence
                 && $node->children[$child] instanceof Node
-                && $node->children[$child]->kind === \ast\AST_BINARY_OP
+				&& 
+				($node->children[$child]->kind === \ast\AST_BINARY_OP ||
+				$node->children[$child]->kind === \ast\AST_ASSIGN)
             ) {
                 $buffer[] = '(' . $this->revertAST($node->children[$child]) . ')';
                 continue;
@@ -1646,15 +1648,15 @@ class AstReverter
 
     private function sanitiseString(string $string) : string
     {
-        return strtr(
-            $string,
-            ["\n" => '\n', '"' => '\"']
-        );
-
         /*return strtr(
             $string,
-            ['$' => '\\$', '\\' => '\\\\', "\n" => '\n', '"' => '\"']
+            ["\n" => '\n', '"' => '\"']
 		);*/
+
+        return strtr(
+            $string,
+            ['$' => '\\$', '\\' => '\\\\', "\n" => '\n', '"' => '\"']
+		);
     }
 
     private function static(Node $node) : string
