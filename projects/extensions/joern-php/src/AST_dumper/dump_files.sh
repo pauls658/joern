@@ -1,5 +1,7 @@
 #!/bin/bash
 
+cat ../cypher/interproc/99_final_cleanup.cypher | cypher-shell
+
 OUTDIR="output"
 
 top_level=$( echo "match (a) where ID(a) = 0 return a.name;" | cypher-shell | tail -n +2 | tr -d "\"" ) 
