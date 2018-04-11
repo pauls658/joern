@@ -8,9 +8,10 @@ ID(def) = aarg.bb_id and
 r.var = aarg.argname
 
 create
-(aarg)-[:REACHES{var:aarg.argname}]->(use);
+(aarg)-[:REACHES{var:aarg.argname}]->(use)
 // We can't assume we can delete this
 // We may assign to a param of a function
 // e.g. $var = func($var);
-//delete
-//r;
+// update: fuck it
+delete
+r;

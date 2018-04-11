@@ -13,7 +13,7 @@ collect(distinct c.funcid) as fids,
 collect(distinct ID(bb)) as bbids,
 plist as plist
 
-foreach(id in fids| create (plist)-[:EXTRA_PARAM]->(:ART_AST{type:"extra_param",funcid:id})) 
+foreach(id in fids| create (plist)-[:EXTRA_PARAM]->(:ART_AST:BB{type:"extra_param",funcid:id})) 
 
 with bbids as bbids 
 unwind bbids as bbid return bbid;

@@ -1,5 +1,6 @@
 <?php
-require __DIR__ . "/vendor/autoload.php";
+require 'AstReverter.php';
+//include '/home/brandon/php-ast/util.php';
 
 use ast\Node;
 use ast\Metadata;
@@ -35,6 +36,8 @@ function Node_from_json($node) {
 	global $md_by_name;
 	if (strtolower($node['type']) == "null") return null;
 	else if (!array_key_exists($node['type'], $md_by_name)) {
+		// the json response escapes backslashes
+		// we need to undo this
 		return $node['code'];
 	}
 
@@ -68,6 +71,9 @@ function add_relation($start, $reltype, $end, &$refs) {
 	if ($reltype == 'name' && array_key_exists('code', $end)) {
 		// no need to make a node object
 		$refs[$start_id]->children['name'] = $end['code'];
+	} elseif ($reltype == 'depth') {
+		// break statement
+		$refs[$start_id]->children['depth'] = $end['type'] == "NULL" ? null : (int)$end['code'];
 	} else {
 		$end_id = (int)$end['id'];
 		if (!array_key_exists($end_id, $refs))
@@ -101,5 +107,7 @@ function json_to_php_ast($json) {
 $json_str = file_get_contents("relations.json");
 $json = json_decode($json_str, true);
 $refs = json_to_php_ast($json["results"][0]);
+//echo ast_dump($refs[(int)$argv[1]]), "\n";
+
 echo (new AstReverter\AstReverter)->getCode($refs[(int)$argv[1]]);
 ?>
