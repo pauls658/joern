@@ -75,11 +75,29 @@ function add_relation($start, $reltype, $end, &$refs) {
 		// break statement
 		$refs[$start_id]->children['depth'] = $end['type'] == "NULL" ? null : (int)$end['code'];
 	} else {
-		$end_id = (int)$end['id'];
+		$end_id = $end['id'];
 		if (!array_key_exists($end_id, $refs))
 			$refs[$end_id] = Node_from_json($end);
-		$refs[$start_id]->children[$reltype] = $refs[$end_id];
+
+		// If we added new statements, there is the possibility they collide with
+		// other new statements. The child_rel of new statements is always a floating point
+		// so we can just tack on 0's til they dont collide
+		// collisions cannot happen for statements in the original AST.
+		$relkey = (string)$reltype;
+		while(array_key_exists($relkey, $refs[$start_id]->children))
+			$relkey .= "0";
+
+		$refs[$start_id]->children[$relkey] = $refs[$end_id];
 	}
+}
+
+function child_cmp($a, $b) {
+	$a = (float)$a;
+	$b = (float)$b;
+    if ($a == $b) {
+        return 0;
+    }
+    return ($a < $b) ? -1 : 1;
 }
 
 function json_to_php_ast($json) {
@@ -99,7 +117,7 @@ function json_to_php_ast($json) {
 		add_relation($row[0], trim($row[1]['child_rel']), $row[2], $node_refs);
 	}
 	foreach ($needs_sorting as $id)
-		ksort($node_refs[$id]->children);
+		uksort($node_refs[$id]->children, 'child_cmp');
 
 	return $node_refs;
 }
