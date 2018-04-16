@@ -60,9 +60,9 @@ class G {
     		case "AST_FOREACH":
     		case "AST_FOR":
     		case "AST_DO_WHILE":
-    		case "AST_GLOBAL":
+    		//case "AST_GLOBAL": we can't be sure about type of global yet
     		case "AST_VAR":
-    		case "AST_RETURN":
+    		//case "AST_RETURN": no interproc right now
     		case "AST_PARAM":
     		case "AST_PROP":
     		case "AST_PROP_DECL":
