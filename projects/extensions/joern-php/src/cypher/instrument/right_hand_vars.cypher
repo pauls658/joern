@@ -15,7 +15,8 @@ lower=(var_top)-[:PARENT_OF*0..]->({type:"AST_VAR"})-[:PARENT_OF]->({type:"strin
 where
 ID(bb) = toInteger(line.pdoms) and
 none(n in nodes(upper) where n.type in ["AST_VAR","AST_PROP","string","AST_DIM"]) and
-all(n in nodes(lower) where n.type in ["AST_VAR","AST_PROP","string","AST_DIM"])
+all(n in nodes(lower) where n.type in ["AST_VAR","AST_PROP","string","AST_DIM"]) and
+none(n in nodes(upper) + nodes(lower) where n:FUNCCALL)
 
 // for now just give back the node where to "splice" in the tainting routine
 return ID(var_top) as var_top;

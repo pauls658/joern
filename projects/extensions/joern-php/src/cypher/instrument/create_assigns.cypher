@@ -14,4 +14,6 @@ ID(stmt) = toInteger(line.stmtid)
 create
 (stmt)-[:PARENT_OF{child_rel:toFloat(line.childid)}]->(assign:AST{type:"AST_ASSIGN",lineno:0}),
 (assign)-[:PARENT_OF{child_rel:"var"}]->(left),
-(assign)-[:PARENT_OF{child_rel:"expr"}]->(right);
+(assign)-[:PARENT_OF{child_rel:"expr"}]->(right)
+
+return ID(right) as id;

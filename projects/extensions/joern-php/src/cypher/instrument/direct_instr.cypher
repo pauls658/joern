@@ -4,7 +4,8 @@ match
 (p:AST)-[r:PARENT_OF]->(a) 
 
 where 
-ID(a) = toInteger(line.id)
+ID(a) = toInteger(line.id) and
+not exists(a.instrumented)
 
 create 
 (p)-[:PARENT_OF{child_rel: r.child_rel}]->(call:AST{type:"AST_CALL",lineno:a.lineno})-[:PARENT_OF{child_rel:"args"}]->(:AST{type:"AST_ARG_LIST",lineno:a.lineno})-[:PARENT_OF{child_rel: 0}]->(a),
@@ -12,7 +13,8 @@ create
 (dim)-[:PARENT_OF{child_rel:"dim"}]->(:AST{type:"string",code:"DBRT",lineno:a.lineno})
 
 set
-r.delete = true;
+r.delete = true,
+a.instrumented = true;
 
 match
 
