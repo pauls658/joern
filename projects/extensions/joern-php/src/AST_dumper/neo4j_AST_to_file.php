@@ -32,13 +32,25 @@ $numeric_children["AST_SWITCH_LIST"] = 1;
 $numeric_children["AST_TRAIT_ADAPTATIONS"] = 1;
 $numeric_children["AST_USE"] = 1;
 
+function get_node_code($node) {
+	switch($node['type']) {
+	case "integer":
+		return (int)$node['code'];
+	case "double":
+		return (double)$node['code'];
+		break;
+	case "string":
+		return (string)$node['code'];
+	default:
+		throw Exception("Fuck you I'm an exception");
+	}
+}
+
 function Node_from_json($node) {
 	global $md_by_name;
 	if (strtolower($node['type']) == "null") return null;
 	else if (!array_key_exists($node['type'], $md_by_name)) {
-		// the json response escapes backslashes
-		// we need to undo this
-		return $node['code'];
+		return get_node_code($node);
 	}
 
 	$node_id = (int)$node['id'];
@@ -70,10 +82,10 @@ function add_relation($start, $reltype, $end, &$refs) {
 
 	if ($reltype == 'name' && array_key_exists('code', $end)) {
 		// no need to make a node object
-		$refs[$start_id]->children['name'] = $end['code'];
+		$refs[$start_id]->children['name'] = get_node_code($end);
 	} elseif ($reltype == 'depth') {
 		// break statement
-		$refs[$start_id]->children['depth'] = $end['type'] == "NULL" ? null : (int)$end['code'];
+		$refs[$start_id]->children['depth'] = $end['type'] == "NULL" ? null : get_node_code($end);
 	} else {
 		$end_id = $end['id'];
 		if (!array_key_exists($end_id, $refs))
