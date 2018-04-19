@@ -16,7 +16,7 @@ where
 ID(bb) = toInteger(line.pdoms) and
 none(n in nodes(upper) where n.type in ["AST_VAR","AST_PROP","string","AST_DIM"]) and
 all(n in nodes(lower) where n.type in ["AST_VAR","AST_PROP","string","AST_DIM"]) and
-none(n in nodes(upper) + nodes(lower) where n:FUNCCALL)
+none(n in nodes(upper) + nodes(lower) where n:FUNCCALL or n.type = "AST_CONDITIONAL")
 
 // for now just give back the node where to "splice" in the tainting routine
 return ID(var_top) as var_top;

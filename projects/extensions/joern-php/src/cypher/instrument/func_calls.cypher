@@ -8,11 +8,12 @@ load csv with headers from "file:///home/brandon/joern/projects/extensions/joern
 
 match
 
-upper=(bb:BB)-[:PARENT_OF*0..]->(var_top:FUNCCALL)
+upper=(bb:BB)-[:PARENT_OF*0..]->(var_top)
 
 where
 ID(bb) = toInteger(line.pdoms) and
-single(n in nodes(upper) where n:FUNCCALL)
+single(n in nodes(upper) where n:FUNCCALL) and
+(var_top:FUNCCALL or var_top.type = "AST_CONDITIONAL")
 
 // for now just give back the node where to "splice" in the tainting routine
 return ID(var_top) as var_top;
