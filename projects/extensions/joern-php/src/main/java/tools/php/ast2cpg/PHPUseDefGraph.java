@@ -10,7 +10,9 @@ import java.util.Collection;
 import java.util.Iterator;
 
 class PHPUseDefGraph extends UseDefGraph {
+	/* maps literal global name to its AST_GLOBAL node. IDK why this is a linked list... */
 	HashMap<String, LinkedList<ASTNode>> globalNameToBB = new HashMap<String, LinkedList<ASTNode>>();
+
 	HashMap<String, LinkedList<ASTNode>> globalNameToDefBB = new HashMap<String, LinkedList<ASTNode>>();
 	LinkedList<Tuple<String, ASTNode>> globalDefs;
 	public HashMap<String, ASTNode> nameToParamNode = new HashMap<String, ASTNode>();

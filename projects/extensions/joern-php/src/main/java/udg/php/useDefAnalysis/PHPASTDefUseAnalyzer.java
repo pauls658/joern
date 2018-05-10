@@ -17,6 +17,7 @@ import udg.useDefAnalysis.environments.EmitUseEnvironment;
 import udg.useDefAnalysis.environments.EmitDefAndUseEnvironment;
 import udg.php.useDefAnalysis.environments.FieldDeclarationEnvironment;
 import udg.php.useDefAnalysis.environments.FunctionCallEnvironment;
+import udg.php.useDefAnalysis.environments.ArgumentListEnvironment;
 import udg.php.useDefAnalysis.environments.ForEachEnvironment;
 import udg.php.useDefAnalysis.environments.IncDecEnvironment;
 import udg.php.useDefAnalysis.environments.ParameterEnvironment;
@@ -28,6 +29,13 @@ import udg.useDefAnalysis.environments.UseDefEnvironment;
 import udg.php.useDefAnalysis.environments.VariableEnvironment;
 import udg.useDefGraph.UseOrDef;
 
+import java.util.HashSet;
+
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
+
 /**
  * PHP-specific implementation of ASTDefUseAnalyzer.
  */
@@ -35,7 +43,23 @@ public class PHPASTDefUseAnalyzer extends ASTDefUseAnalyzer
 {
 	// Determines whether we want to analyze a predicate or a normal statement
 	private boolean analyzingPredicate = false;
+	private HashSet<String> nonDefingFunctions;
 
+	public PHPASTDefUseAnalyzer() {
+		this.nonDefingFunctions = new HashSet<String>();
+		try {
+			File file = new File("non_def_funcs.txt");
+			FileReader fileReader = new FileReader(file);
+			BufferedReader bufferedReader = new BufferedReader(fileReader);
+			String line;
+			while ((line = bufferedReader.readLine()) != null) {
+				nonDefingFunctions.add(line.trim());
+			}
+			fileReader.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
 	/**
 	 * Analyze an AST as usual. In case analyzeAST(ASTProvider) was called
 	 * on a standalone variable/constant/property, assume we are analyzing
@@ -161,13 +185,16 @@ public class PHPASTDefUseAnalyzer extends ASTDefUseAnalyzer
 			case "BinaryOperationExpression":
 			case "InstanceofExpression":
 				return new EmitUseEnvironment();
+
 			case "CallExpressionBase":
 			case "MethodCallExpression":
 			case "StaticCallExpression":
 			case "NewExpression":
 				//return new EmitUseEnvironment();
-				return new FunctionCallEnvironment();
+				return new FunctionCallEnvironment(this.nonDefingFunctions, astProvider);
 
+			case "ArgumentList":
+				return new ArgumentListEnvironment();
 
 			// environments that emit DEFs for all their children symbols
 

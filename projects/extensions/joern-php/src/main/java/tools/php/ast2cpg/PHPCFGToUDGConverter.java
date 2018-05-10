@@ -47,7 +47,9 @@ class PHPCFGToUDGConverter extends CFGToUDGConverter {
                 Collection<UseOrDef> usesAndDefs = getASTDefUseAnalyzer()
                         .analyzeAST(provider);
 				String nodeType = statementNode.getProperty("type");
-				if (nodeType instanceof String && (nodeType.equals("AST_GLOBAL") || nodeType.equals("AST_PARAM"))) {
+				if (nodeType instanceof String && 
+					(nodeType.equals("AST_GLOBAL") || nodeType.equals("AST_PARAM")))
+				{
 					if (usesAndDefs.size() != 1) {
 						throw new RuntimeException("AST_GLOBAL/PARAM has more than one use/def");
 					}

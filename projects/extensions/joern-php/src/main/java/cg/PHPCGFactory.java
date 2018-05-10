@@ -85,13 +85,11 @@ public class PHPCGFactory {
 				if( callIdentifier.getFlags().contains( PHPCSVNodeTypes.FLAG_NAME_FQ)) {
 					String functionKey = callIdentifier.getNameChild().getEscapedCodeStr();
 					addCallEdgeIfDefinitionKnown(cg, functionDefs, functionCall, functionKey);
-				}
-
-				// otherwise, i.e., if the call identifier is not fully qualified,
-				// first look in the current namespace, then if the function is not found,
-				// look in the global namespace
-				// (see http://php.net/manual/en/language.namespaces.rules.php)
-				else {
+				} else {
+					// otherwise, i.e., if the call identifier is not fully qualified,
+					// first look in the current namespace, then if the function is not found,
+					// look in the global namespace
+					// (see http://php.net/manual/en/language.namespaces.rules.php)
 					boolean found = false;
 					// note that looking in the current namespace first only makes
 					// sense if we are not already in the global namespace anyway
@@ -108,9 +106,9 @@ public class PHPCGFactory {
 						addCallEdgeIfDefinitionKnown(cg, functionDefs, functionCall, functionKey);
 					}
 				}
-			}
-			else
+			} else {
 				System.err.println("Statically unknown function call at node id " + functionCall.getNodeId() + "!");
+			}
 		}
 	}
 	
@@ -215,34 +213,42 @@ public class PHPCGFactory {
 				String methodKey = methodName.getEscapedCodeStr();
 				// let's count the dynamic methods that could be mapped, and those that cannot
 				if( nonStaticMethodDefs.containsKey(methodKey)) {
-						
 					// check whether there is only one matching function definition
 					if( nonStaticMethodDefs.get(methodKey).size() == 1) {
 						addCallEdge( cg, methodCall, nonStaticMethodDefs.get(methodKey).get(0));
 						successfullyMapped++;
-					}
-					else { // there is more than one matching function definition
+					} else { // there is more than one matching function definition
 						// we can still map $this->foo(), though, because we know what $this is
 						if( methodCall.getTargetObject() instanceof Variable
 							&& ((Variable)methodCall.getTargetObject()).getNameExpression() instanceof StringExpression
 							&& ((StringExpression)((Variable)methodCall.getTargetObject()).getNameExpression()).getEscapedCodeStr().equals("this")) {
 							
 							String enclosingClass = methodCall.getEnclosingClass();
+							boolean mapped = false;
 							for( Method methodDef : nonStaticMethodDefs.get(methodKey)) {
 								if( enclosingClass.equals(methodDef.getEnclosingClass())) {
 									addCallEdge( cg, methodCall, methodDef);
 									successfullyMapped++;
+									mapped = true;
 									break;
 								}
-							}							
-						}
-						else
+							}
+							if (!mapped) {
+								//for( Method methodDef : nonStaticMethodDefs.get(methodKey)) {
+								//	addCallEdge( cg, methodCall, methodDef);
+								//}
+							}
+						} else {
+							//for( Method methodDef : nonStaticMethodDefs.get(methodKey)) {
+							//	addCallEdge( cg, methodCall, methodDef);
+							//}
 							ambiguousNotMapped++;
+						}
 					}
 				}
-			}
-			else
+			} else {
 				System.err.println("Statically unknown non-static method call at node id " + methodCall.getNodeId() + "!");
+			}
 		}
 		
 		System.err.println();
@@ -398,9 +404,9 @@ public class PHPCGFactory {
 			String methodKey = ((Method)functionDef).getName();
 
 			if( nonStaticMethodDefs.containsKey(methodKey)) {
-				System.err.println("Method definition for '" + methodKey + "' ambiguous: " +
-						" already known method definitions are " + nonStaticMethodDefs.get(methodKey) +
-						", now adding " + functionDef + ")");
+				System.err.println("Method definition for '" + methodKey + "' ambiguous");//: " +
+						//" already known method definitions are " + nonStaticMethodDefs.get(methodKey) +
+						//", now adding " + functionDef + ")");
 			}
 			
 			nonStaticMethodDefs.add( methodKey, (Method)functionDef);
