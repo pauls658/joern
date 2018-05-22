@@ -1,6 +1,7 @@
 from collections import defaultdict
 import sys,os
 import glob
+from copy import deepcopy
 
 import json
 import networkx as nx
@@ -18,10 +19,126 @@ def graph_from_json():
     for row in rows:
         row = row["row"]
         rel_props = row[1]
+        rel_props["label"] = row[3]
         i = int(rel_props["id"])
         g.add_edge(int(row[0]), int(row[2]), **rel_props)
 
     return g
+
+class TravObj(object):
+    def __init__(self, G, node):
+        self.stack = []
+        self.node = node
+        self.G = G
+
+    def has_ctx(self):
+        return bool(self.stack)
+
+    def get_ctx(self):
+        return self.stack[-1]
+
+    def __iter__(self):
+        self.iter = iter(self.G.adj[self.node])
+        return self
+
+    def copy_pop(self, node_id):
+        ret = TravObj(self.G, node_id)
+        ret.stack = deepcopy(self.stack)
+        ret.stack.pop()
+        return ret
+
+    def copy_push(self, node_id, ctx):
+        ret = TravObj(self.G, node_id)
+        ret.stack = deepcopy(self.stack)
+        ret.stack.append(ctx)
+        return ret
+
+    def copy(self, node_id):
+        ret = TravObj(self.G, node_id)
+        ret.stack = deepcopy(self.stack)
+        return ret
+
+    stop = set([209149, 209152, 209155, 209158, 209161])
+    def next(self):
+        # exits either with the return, or
+        # stop iteration exception
+        while True:
+            c = next(self.iter)
+            #if self.G.nodes[c].get("globalName", "nope") == "username":
+            #if c == 204747:
+            if self.G.nodes[c].get("globalName", None) is not None:
+                import pdb; pdb.set_trace()
+            e = self.G.get_edge_data(self.node, c)[0]
+            if e["label"] == "INTERPROC":
+                if "type" not in e:
+                    return TravObj(self.G, c)
+                if e["type"] == "arg_entry":
+                    return self.copy_push(c, int(e["call_id"]))
+                elif e["type"] == "arg_exit" or e["type"] == "return":
+                    if not self.stack:
+                        return TravObj(self.G, c)
+                    elif e["call_id"] == self.stack[-1]:
+                        return self.copy_pop(c)
+                    # else skip child
+                else:
+                    # global or something... clear stack
+                    return TravObj(self.G, c)
+            else:
+                # REACHES
+                return self.copy(c)
+
+class CTXSensitiveDFS(object):
+    """
+    In general, all we only use node ids. e.g. "start" is 
+    a node id rather than an actual node.
+    """
+    def __init__(self, G, start):
+        self.ctx_visited = set()
+        self.globally_visited = set()
+        self.G = G
+        self.start = start
+        self.reachable = set()
+        self.echos = set()
+
+    def have_visited(self, trav_obj):
+        if trav_obj.node in self.globally_visited:
+            return True
+
+        if trav_obj.has_ctx():
+            return (trav_obj.node, trav_obj.get_ctx()) in self.ctx_visited
+        
+    def add_visited_global(self, trav_obj):
+        self.globally_visited.add(trav_obj.node)
+
+    def add_visited_ctx(self, trav_obj):
+        self.ctx_visited.add(
+                (trav_obj.node, trav_obj.get_ctx())
+        )
+
+    def add_visited(self, trav_node):
+        self.reachable.add(trav_node.node)
+        if self.G.node[trav_node.node]["type"] == "AST_ECHO":
+            self.echos.add(trav_node.node)
+        if trav_node.has_ctx():
+            self.add_visited_ctx(trav_node)
+        else:
+            self.add_visited_global(trav_node)
+
+    def ctx_sensitive_DFS(self):
+        trav_obj = TravObj(self.G, self.start)
+        stack = [(trav_obj, iter(trav_obj))]
+        self.add_visited(trav_obj)
+        while stack:
+            trav_obj, reaching_iter = stack[-1]
+            try:
+                child = next(reaching_iter)
+                if not self.have_visited(child):
+                    self.add_visited(child)
+                    stack.append((child, iter(child)))
+            except StopIteration:
+                stack.pop()
+        return self.reachable, self.echos
+
 
 def reachables(g, start):
     reachable = set()
@@ -32,7 +149,7 @@ def reachables(g, start):
         reachable.add(nid)
     return reachable, echos
 
-def post_doms(g, echos):
+def post_doms(g, echos, reachable):
     rg = g.reverse(copy=True)
     # exit_id -> [echos]
     groupd_echos = defaultdict(list)
@@ -48,9 +165,13 @@ def post_doms(g, echos):
             q = [echo]
             while q:
                 cur = q.pop()
-                preds = list(g.predecessors(cur))
+                preds = list(filter(lambda x: x in reachable, g.predecessors(cur)))
                 try:
-                    if all([idoms[pred] == cur and g.node[pred].get('handleable', True) for pred in preds]):
+                    if not preds:
+                        post_doms.append(cur)
+                    elif all([(idoms[pred] == cur and 
+                            g.node[pred]["handleable"]) 
+                            for pred in preds]):
                         q.extend(preds)
                     else:
                         post_doms.append(cur)
@@ -84,11 +205,13 @@ def dump_pdoms(g, pdoms):
                         (str(dom)))
     
 def analyze(g, start):
-    reachable, echos = reachables(g, start)
-    return post_doms(g, echos)
+    trav = CTXSensitiveDFS(g, start)
+    reachable, echos = trav.ctx_sensitive_DFS()
+    return post_doms(g, echos, reachable)
 
 def main():
     g = graph_from_json() 
+    #pdoms = analyze(g, 78) 
     pdoms = analyze(g, 161951) 
     dump_pdoms(g, pdoms)
 

@@ -129,6 +129,7 @@ public class Main {
 						default:
 							throw new Exception("oh dang");
 					}
+					continue;
 				}
 
 
