@@ -21,7 +21,7 @@ if [[ -z $2 ]]; then
 fi
 
 PHPJOERN=src/phpjoern
-PHPINPUT=/home/brandon/php_apps/$2
+PHPINPUT=/home/brandon/php_apps/rewritten/$2
 JEXP_HOME=/home/brandon/batch-import
 JOERN=/home/brandon/joern
 
@@ -57,7 +57,7 @@ if [[ "$1" == "4" ]]; then
 	chown -R neo4j:adm /var/lib/neo4j/data/databases/cur.db
 	service neo4j start
 	sleep 3
-	cat add_global_defs.cypher | cypher-shell -u neo4j -p " "
+	#cat add_global_defs.cypher | cypher-shell -u neo4j -p " "
 fi
 
 if [[ "$1" == "5" ]]; then

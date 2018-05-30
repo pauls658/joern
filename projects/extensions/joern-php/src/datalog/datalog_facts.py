@@ -213,7 +213,7 @@ def main():
     load_store_load_info()
 
     g = graph_from_json()
-    write_copied_cfg(g, 3)
+    write_copied_cfg(g, 32334)
 
     write_datalog_node_store_load()
     write_datalog_echos_and_tainted()

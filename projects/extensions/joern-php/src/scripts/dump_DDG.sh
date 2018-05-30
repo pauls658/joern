@@ -11,7 +11,7 @@ wget \
 
 
 wget \
-	--post-data='{"statements":[{"statement": "match (a)-[r:REACHES|INTERPROC]->(b) return ID(a) as a, r, ID(b) as b"}]}' \
+	--post-data='{"statements":[{"statement": "match (a)-[r:REACHES|INTERPROC]->(b) return ID(a) as a, r, ID(b) as b, type(r) as label"}]}' \
 	--header="Accept: application/json; charset=UTF-8" \
 	--header="Content-Type: application/json" \
 	-O rels.json -q \

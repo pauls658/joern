@@ -23,3 +23,26 @@ wget \
 	--header="Content-Type: application/json" \
 	-O interproc.json -q \
 	http://localhost:7474/db/data/transaction/commit
+
+# read/write
+wget \
+	--post-data='{"statements":[{"statement": "match (a) where exists(a.defs) or exists(a.uses) return ID(a) as id, a.defs as defs, a.uses as uses"}]}' \
+	--header="Accept: application/json; charset=UTF-8" \
+	--header="Content-Type: application/json" \
+	-O store_load.json -q \
+	http://localhost:7474/db/data/transaction/commit
+
+# echos
+wget \
+	--post-data='{"statements":[{"statement": "match (a{type:\"AST_ECHO\"}) return collect(ID(a))"}]}' \
+	--header="Accept: application/json; charset=UTF-8" \
+	--header="Content-Type: application/json" \
+	-O echos.json -q \
+	http://localhost:7474/db/data/transaction/commit
+
+wget \
+	--post-data='{"statements":[{"statement": "match (:FUNCCALL{name:\"sensitive_data\"})<-[:ASSOC]-(:ART_AST{type:\"return\"})-[:RET_DEF]->(a) return collect(ID(a))"}]}' \
+	--header="Accept: application/json; charset=UTF-8" \
+	--header="Content-Type: application/json" \
+	-O tainted.json -q \
+	http://localhost:7474/db/data/transaction/commit

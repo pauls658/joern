@@ -1,0 +1,30 @@
+sqGetGlobalVar <---- important, look into
+sqgetglobalvar <---- important, look into
+sq_get_html_translation_table<---- important, look into
+
+list_addr
+add
+remove
+lookup
+modify
+Header
+parseAddress
+initStream
+finalizeStream
+formatMenuBar
+Define
+urlEncode
+function
+is_null
+search
+filter
+setOption
+quoteString
+query
+fetchRow
+simpleQuery
+preWriteToStream
+parseProperties
+parseDisposition
+
+

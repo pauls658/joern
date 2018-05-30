@@ -16,8 +16,8 @@ match
 (call:FUNCCALL)-[:PARENT_OF]->(alist:AST{type: "AST_ARG_LIST"})-[:PARENT_OF]->(arg:AST)
 
 create
-(entry:ART_AST{type:"arg_entry",call_id:ID(call),childnum:arg.childnum,lineno:arg.lineno,bb_id:call.bb_id}), // artificial entry arg
-(exit:ART_AST{type:"arg_exit",call_id:ID(call),childnum:arg.childnum,lineno:arg.lineno,bb_id:call.bb_id}), // artificial exit arg
+(entry:ART_AST{type:"arg_entry",call_id:ID(call),childnum:arg.childnum,lineno:arg.lineno,bb_id:call.bb_id,funcid:arg.funcid}), // artificial entry arg
+(exit:ART_AST{type:"arg_exit",call_id:ID(call),childnum:arg.childnum,lineno:arg.lineno,bb_id:call.bb_id,funcid:arg.funcid}), // artificial exit arg
 (entry)-[:ASSOC]->(arg),
 (entry)-[:CALL_ID]->(call),
 (exit)-[:ASSOC]->(arg),
@@ -28,5 +28,5 @@ match
 (call:FUNCCALL)
 
 create
-(ret:ART_AST{type:"return",call_id:ID(call),lineno:call.lineno,bb_id:call.bb_id}), // artificial entry arg
+(ret:ART_AST{type:"return",call_id:ID(call),lineno:call.lineno,bb_id:call.bb_id,funcid:call.funcid}), // artificial entry arg
 (ret)-[:ASSOC]->(call);
