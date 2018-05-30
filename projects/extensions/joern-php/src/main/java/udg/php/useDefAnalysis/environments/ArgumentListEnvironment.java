@@ -10,37 +10,25 @@ import ast.ASTNode;
 import udg.useDefAnalysis.environments.EmitDefAndUseEnvironment;
 import udg.useDefGraph.UseOrDef;
 
-public class FunctionCallEnvironment extends EmitDefAndUseEnvironment  
+public class ArgumentListEnvironment extends EmitDefAndUseEnvironment  
 {
-
-	private HashSet<String> nonDefingFunctions;
-	private String name;
-
-	public FunctionCallEnvironment(HashSet<String> in, ASTProvider aProv) {
-		this.nonDefingFunctions = in;
-		ASTNodeASTProvider func = (ASTNodeASTProvider)aProv;
-		ASTNode a = func.getASTNode();
-		if (a.getProperty("type").equals("AST_CALL")) {
-			a = a.getChild(0); // the name
-			if (a.getProperty("type").equals("AST_NAME")) {
-				a = a.getChild(0);
-				this.name = a.getProperty("code");
-			}
-		} else {
-			// always def args
-			this.name = null;
-		}
-	}
-
 
 	@Override
 	public void addChildSymbols(LinkedList<String> childSymbols,
 			ASTProvider child)
 	{
-		if (isDef(child))
-			defSymbols.addAll(childSymbols);
-		if (isUse(child))
-			useSymbols.addAll(childSymbols);
+		ASTNodeASTProvider c = (ASTNodeASTProvider)child;
+		String id = String.valueOf(c.getASTNode().getNodeId());
+		if (isDef(child)) {
+			for (String symbol : childSymbols) {
+				defSymbols.add("@dbr argsymbol " + id + " " + symbol);
+			}
+		}
+		if (isUse(child)) {
+			for (String symbol : childSymbols) {
+				useSymbols.add("@dbr argsymbol " + id + " " + symbol);
+			}
+		}
 	}
 
 	@Override
@@ -63,8 +51,9 @@ public class FunctionCallEnvironment extends EmitDefAndUseEnvironment
 	@Override
 	public boolean isDef( ASTProvider child)
 	{
+		return true;
+		/**
 		ASTNodeASTProvider c = (ASTNodeASTProvider)child;
-		//return c.getASTNode().getProperty("type").equals("AST_ARG_LIST");
 		if (this.name == null || !this.nonDefingFunctions.contains(this.name)) {
 			// Def all the args
 			return c.getASTNode().getProperty("type").equals("AST_ARG_LIST");
@@ -72,6 +61,7 @@ public class FunctionCallEnvironment extends EmitDefAndUseEnvironment
 			// this is a built-in func, and we know it does not def anything
 			return false;
 		}
+		*/
 	}
 	
 	@Override

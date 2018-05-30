@@ -5,10 +5,12 @@ match
 
 where
 ID(use) = aarg.bb_id and
-r.var = aarg.argname
+r.var in aarg.argname
 
 create
-(aarg)<-[:REACHES{var:aarg.argname}]-(def)
+(aarg)<-[:REACHES{var:r.var}]-(def)
 
-delete
-r;
+set
+r.delete = true;
+
+match ()-[r]-() where exists(r.delete) delete r;

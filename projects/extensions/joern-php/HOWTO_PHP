@@ -21,7 +21,7 @@ if [[ -z $2 ]]; then
 fi
 
 PHPJOERN=src/phpjoern
-PHPINPUT=/home/brandon/php_apps/$2
+PHPINPUT=/home/brandon/php_apps/originals/$2
 JEXP_HOME=/home/brandon/batch-import
 JOERN=/home/brandon/joern
 

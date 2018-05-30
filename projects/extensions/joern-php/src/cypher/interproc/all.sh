@@ -15,6 +15,7 @@ for cmd_file in $( ls *.cypher ); do
 	echo "Running $cmd_file..."
 	res=$( cat $cmd_file | cypher-shell -u neo4j -p " " )
 
-	echo "$res" > `dirname $0`/prev.csv
+	echo "$res" | head -1  > `dirname $0`/prev.csv
+	echo "$res" | grep -E "[0-9]"  >> `dirname $0`/prev.csv
 
 done
