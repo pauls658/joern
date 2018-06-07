@@ -147,10 +147,13 @@ def write_copied_cfg(g, func_entry):
                     print_datalog_edge(id_translation[cur], id_translation[s])
                     print_datalog_edge(id_translation[func_exit], id_translation[arg_exit])
                 else:
+                    # regular function call
                     call_entry, call_exit = write_copied_cfg(g, s)
                     print_datalog_edge(id_translation[cur], call_entry)
                     print_datalog_edge(call_exit, id_translation[arg_exit])
-                    work.append(arg_exit)
+                # the only way to the arg exit is through the function,
+                # so in either case, we want to add it
+                work.append(arg_exit)
 
             elif s not in id_translation:
                 # we haven't visited s yet, add it to work
@@ -213,7 +216,7 @@ def main():
     load_store_load_info()
 
     g = graph_from_json()
-    write_copied_cfg(g, 32334)
+    write_copied_cfg(g, 78)
 
     write_datalog_node_store_load()
     write_datalog_echos_and_tainted()
