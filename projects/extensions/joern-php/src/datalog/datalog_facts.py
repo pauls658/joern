@@ -4,18 +4,18 @@ import networkx as nx
 def graph_from_json():
     g = nx.MultiDiGraph()
 
-    rows = json.load(open("nodes.json", "rb"))["results"][0]["data"]
+    rows = json.load(open("tmp/nodes.json", "rb"))["results"][0]["data"]
     for row in rows:
         row = row["row"][0]
         i = int(row["id"])
         g.add_node(i, **row) 
 
-    rows = json.load(open("flows_to.json", "rb"))["results"][0]["data"]
+    rows = json.load(open("tmp/flows_to.json", "rb"))["results"][0]["data"]
     for row in rows:
         row = row["row"]
         g.add_edge(int(row[0]), int(row[1]), label="FLOWS_TO")
 
-    rows = json.load(open("interproc.json", "rb"))["results"][0]["data"]
+    rows = json.load(open("tmp/interproc.json", "rb"))["results"][0]["data"]
     for row in rows:
         row = row["row"]
         rel_props = row[2]
@@ -27,13 +27,13 @@ def graph_from_json():
 stmt_defs = {}
 stmt_uses = {}
 var_map = {}
-def load_store_load_info():
+def load_def_use_info():
     global stmt_defs
     global stmt_uses
     global var_map
     distinct_vars = set()
     # defs/uses for stmts by stmt_id
-    rows = json.load(open("store_load.json", "rb"))["results"][0]["data"]
+    rows = json.load(open("tmp/def_use.json", "rb"))["results"][0]["data"]
     for row in rows:
         row = row["row"] # id, defs, uses
         stmt_id = int(row[0])
@@ -52,51 +52,45 @@ def load_store_load_info():
         var_map[symbol] = var_id
         var_id += 1
 
-echos = set()
-def load_echos():
-    global echos
-    echos.update(json.load(open("echos.json", "rb"))["results"][0]["data"][0]["row"][0])
+sinks = set()
+def load_sinks():
+    global sinks
+    sinks.update(json.load(open("tmp/sinks.json", "rb"))["results"][0]["data"][0]["row"][0])
 
-tainted = set()
-def load_tainted():
-    global tainted
-    tainted.update(json.load(open("tainted.json", "rb"))["results"][0]["data"][0]["row"][0])
+sources = set()
+def load_sources():
+    global sources
+    sources.update(json.load(open("tmp/sources.json", "rb"))["results"][0]["data"][0]["row"][0])
 
 def profile_memory():
     from memory_profiler import memory_usage
     mem_usage = memory_usage(graph_from_json)
     print('Maximum memory usage: %s' % max(mem_usage))
 
-def print_datalog_edge(start, end):
-    global dl_facts_fd
+def write_datalog_edge(start, end):
+    global datalog_fd
     global g
     global id_map
-    #dl_facts_fd.write("(rule (po #x%08x #x%08x))\n" % (start, end))
-    dl_facts_fd.write("(rule (po #x%08x #x%08x)) ;; %s to %s \n" % 
-            #(start, end, id_map[start], id_map[end]))
-            (start, end, g.nodes[id_map[start]]["type"], g.nodes[id_map[end]]["type"]))
+    datalog_fd.write("(rule (po #x%08x #x%08x))\n" % (start, end))
+            #(start, end, g.nodes[id_map[start]]["type"], g.nodes[id_map[end]]["type"]))
 
-def print_datalog_write(stmt_id, var_id):
-    global dl_facts_fd
-    dl_facts_fd.write("(rule (write #x%08x #x%08x))\n" % (stmt_id, var_id))
+def write_datalog_def(stmt_id, var_id):
+    global datalog_fd
+    datalog_fd.write("(rule (def #x%08x #x%08x))\n" % (stmt_id, var_id))
 
-def print_datalog_read(stmt_id, var_id):
-    global dl_facts_fd
-    dl_facts_fd.write("(rule (read #x%08x #x%08x))\n" % (stmt_id, var_id))
+def write_datalog_use(stmt_id, var_id):
+    global datalog_fd
+    datalog_fd.write("(rule (use #x%08x #x%08x))\n" % (stmt_id, var_id))
 
-def print_datalog_variable(name, var_id):
-    global dl_facts_fd
-    dl_facts_fd.write("(rule (variable #x%08x)) ;; %s\n" % (var_id, name))
+def write_datalog_sink(i):
+    global datalog_fd
+    datalog_fd.write("(rule (sink #x%08x))\n" % (i))
 
-def print_datalog_echo(i):
-    global dl_facts_fd
-    dl_facts_fd.write("(rule (echo #x%08x))\n" % (i))
+def write_datalog_source(i):
+    global datalog_fd
+    datalog_fd.write("(rule (source #x%08x))\n" % (i))
 
-def print_datalog_sen(i):
-    global dl_facts_fd
-    dl_facts_fd.write("(rule (sen #x%08x))\n" % (i))
-
-def write_datalog_node_store_load():
+def write_datalog_node_def_use():
     global idc
     global stmt_defs
     global stmt_uses
@@ -105,21 +99,26 @@ def write_datalog_node_store_load():
     for i in range(0, idc): # idc itself has not been used yet
         orig_id = id_map[i]
         for d in stmt_defs.get(orig_id, []):
-            print_datalog_write(var_map[d], i)
+            write_datalog_def(i, var_map[d])
         for u in stmt_uses.get(orig_id, []):
-            print_datalog_read(var_map[u], i)
+            write_datalog_use(i, var_map[u])
 
-def write_copied_cfg(g, func_entry):
-    global idc
+# funcid -> (entry, exit)
+last_created = {}
+def write_copied_cfg(g, func_entry, max_depth, cur_depth=0):
+    global idc, last_created
+
     # orig id -> new id
     id_translation = {func_entry : idc}
     id_map[idc] = func_entry
     idc += 1
-
+    
     func_exit = int(g.nodes[func_entry]["exit_id"])
     id_translation[func_exit] = idc
     id_map[idc] = func_exit
     idc += 1
+    
+    last_created[int(g.nodes[func_entry]["funcid"])] = (id_translation[func_entry], id_translation[func_exit])
 
     work = [func_entry]
     while work:
@@ -144,15 +143,22 @@ def write_copied_cfg(g, func_entry):
                 if s in id_translation: 
                     # recursion
                     assert s == func_entry
-                    print_datalog_edge(id_translation[cur], id_translation[s])
-                    print_datalog_edge(id_translation[func_exit], id_translation[arg_exit])
+                    write_datalog_edge(id_translation[cur], id_translation[s])
+                    write_datalog_edge(id_translation[func_exit], id_translation[arg_exit])
                 else:
                     # regular function call
-                    call_entry, call_exit = write_copied_cfg(g, s)
-                    print_datalog_edge(id_translation[cur], call_entry)
-                    print_datalog_edge(call_exit, id_translation[arg_exit])
+                    fid = int(g.nodes[s]["funcid"])
+                    if cur_depth <= max_depth or fid not in last_created:
+                        # copy if we are not at max depth, or if copy
+                        # does not already exist
+                        call_entry, call_exit = write_copied_cfg(g, s, max_depth, cur_depth + 1)
+                        write_datalog_edge(id_translation[cur], call_entry)
+                        write_datalog_edge(call_exit, id_translation[arg_exit])
+                    else:
+                        write_datalog_edge(id_translation[cur], last_created[fid][0])
+                        write_datalog_edge(last_created[fid][1], id_translation[arg_exit])
                 # the only way to the arg exit is through the function,
-                # so in either case, we want to add it
+                # so in either case we want to add it
                 work.append(arg_exit)
 
             elif s not in id_translation:
@@ -161,69 +167,67 @@ def write_copied_cfg(g, func_entry):
                 id_map[idc] = s
                 idc += 1
                 work.append(s)
-                print_datalog_edge(id_translation[cur], id_translation[s])
+                write_datalog_edge(id_translation[cur], id_translation[s])
 
             else:
                 # we have visited s, or it is the func_entry/exit, in
                 # either case, do not continue
-                print_datalog_edge(id_translation[cur], id_translation[s])
+                write_datalog_edge(id_translation[cur], id_translation[s])
 
     return id_translation[func_entry], id_translation[func_exit]
 
-def datalog_variables():
-    global var_map
-    for name, i in var_map.iteritems():
-        print_datalog_variable(name, i)
-
-def write_datalog_echos_and_tainted():
-    global echos
-    global tainted
+def write_datalog_sinks_and_sources():
+    global sinks
+    global sources
     global idc
     global id_map
     for i in range(0, idc):
-        if id_map[i] in echos:
-            print_datalog_echo(i)
-        elif id_map[i] in tainted:
-            print_datalog_sen(i)
+        if id_map[i] in sinks:
+            write_datalog_sink(i)
+        elif id_map[i] in sources:
+            write_datalog_source(i)
 
 def save_maps():
     global idc
     global id_map
-    out_fd = open("id_map.csv", "w+")
+    out_fd = open("tmp/id_map.csv", "w+")
     for i in range(0, idc):
         out_fd.write(str(i) + "," + str(id_map[i]) + "\n")
     out_fd.close()
 
     # dont need this actually
     global var_map
-    out_fd = open("var_map.csv", "w+")
+    out_fd = open("tmp/var_map.csv", "w+")
     for name, i in var_map.iteritems():
-        out_fd.write(str(i) + "," + name)
+        out_fd.write(str(i) + "," + name + "\n")
     out_fd.close()
 
 
 idc = 0
 # copied id -> orig id
 id_map = {}
-dl_facts_fd = open("facts.smt2", "w+")
+datalog_fd = open("tmp/facts.smt", "w+")
 g = None
+copied_funcs = 0
+unique_funcs = set()
 def main():
-    global dl_facts_fd
+    global datalog_fd, copied_funcs
     global g
 
-    load_echos()
-    load_tainted()
-    load_store_load_info()
+    load_sinks()
+    load_sources()
+    load_def_use_info()
 
     g = graph_from_json()
-    write_copied_cfg(g, 78)
-
-    write_datalog_node_store_load()
-    write_datalog_echos_and_tainted()
+    write_copied_cfg(g, 8844, 0)
+    print "Total funcs: " + str(copied_funcs)
+    print "Unique funcs: " + str(len(unique_funcs))
+    write_datalog_node_def_use()
+    write_datalog_sinks_and_sources()
 
     save_maps()
 
-    dl_facts_fd.close()
+    datalog_fd.close()
 
 if __name__ == "__main__":
     main()
