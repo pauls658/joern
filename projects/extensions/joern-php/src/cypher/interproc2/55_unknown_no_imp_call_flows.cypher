@@ -24,10 +24,10 @@
 // ini_get
 // srand/rand
 // bin2hex
-load csv with headers from "file:///home/brandon/joern/projects/extensions/joern-php/src/cypher/interproc/prev.csv" as line
+load csv from "file:///home/brandon/joern/projects/extensions/joern-php/src/cypher/interproc2/prev.csv" as line
 match (a)
 where 
-ID(a) = toInteger(line.donecallid)
+ID(a) = toInteger(line[0])
 set a.done = true;
 
 match 
