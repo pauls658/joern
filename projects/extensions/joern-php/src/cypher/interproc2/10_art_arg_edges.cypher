@@ -47,11 +47,12 @@ create
 // first do the arg entries. This query moves incoming CFG edges to the deepest func call artificial args
 match
 
-(origin)-[inc:FLOWS_TO]->(:BB)-[:PARENT_OF*0..]->(call:FUNCCALL)<-[:CALL_ID]-(entry{type:"arg_entry",childnum:0})
+(origin)-[inc:FLOWS_TO]->(bb:BB)-[:PARENT_OF*0..]->(call:FUNCCALL)<-[:CALL_ID]-(entry{type:"arg_entry",childnum:0})
 
 where
 not exists(call.not_deepest) and
-not exists(inc.new_edge)
+not exists(inc.new_edge) and
+ID(bb) = call.bb_id // make sure we don't match the parent in a nested blocks (e.g. a loop)
 
 create
 (origin)-[:FLOWS_TO{new_edge:true}]->(entry)
