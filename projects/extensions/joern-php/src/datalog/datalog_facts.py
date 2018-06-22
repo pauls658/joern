@@ -133,10 +133,114 @@ def write_datalog_nonkilling_args(g, call_id, id_translation):
             g.nodes(data=True)):
         write_datalog_nonkilling_stmt(id_translation[n])
 
+def get_argentries_for_callid(g, call_id):
+    return [n for n, _ in filter(
+            lambda (_, d): 
+            d["type"] == "arg_entry" and
+            d["call_id"] == call_id,
+            g.nodes(data=True))]
+
+def write_bounded_copied_cfg(g, func_entry, max_call_depth, cur_depth=0):
+    """
+    params:
+        - g: the graph
+        - func_entry: the un-translated CFG_FUNC_ENTRY id
+        - max_copy_depth: the depth for when to stop copying (from the
+        bottom)
+        - cur_depth: the current size of the call stack 
+    returns:
+        - translated entry, translated exit, the maximum call depth for any
+        call stack occurring in this function
+    """
+    intra_edges = set() # edges that connect nodes strictly belonging to this function call
+    inter_entries = set() # interproc edges that enter a new func call
+    inter_exits = set() # interproc edges that exit a new func call
+    leaf_call = True # is this a leaf-node in the call graph?
+    max_call_depth = 0 # the maximum depth of any call stack that contains this function
+    non_killing_nodes = set() # nodes that don't kill any defs. usually artificial arg_entries
+
+    func_exit = int(g.nodes[func_entry]["exit_id"])
+
+    visited = set([func_exit]) # un-translated ids of nodes who's successors we have processed
+    work = [func_entry] # added to visited on first iter
+    while work:
+        cur = work.pop()
+        visited.add(cur)
+        for s in g.adj[cur]:
+
+            e = g.get_edge_data(cur, s)[0]
+            if e["label"] == "INTERPROC":
+                arg_exit = e["exit_id"]
+
+                assert e["type"] == "entry" and \
+                        arg_exit not in visited
+               
+                # the only way to the arg_exit is through the function,
+                # regardless if this is a recursive call or not
+                work.append(arg_exit)
+
+                if s in visited:
+                    # recursion
+                    assert s == func_entry
+                    intra_edges.add((cur, s))
+                    intra_edges.add((func_exit, arg_exit))
+                    # don't kill the param definitions of the parent
+                    # call
+                    non_killing_nodes.add(get_argentries_for_callid(g, g.nodes[cur]["call_id"]))
+                else:
+                    # regular function call, put off decision to copy
+                    # until the end
+                    call_entry, call_exit, call_depth = write_bounded_copied_cfg(g, s, max_depth, cur_depth + 1)
+                    max_call_depth = max(max_call_depth, call_depth)
+                    inter_entries.add((cur, call_entry))
+                    inter_exits.add((arg_exit, call_exit))
+                    leaf_call = False
+
+            else:
+                intra_edges.add((cur, s))
+                if s not in visited:
+                    # haven't processed this node's successors
+                    work.append(s)
+    
+    if leaf_call:
+        max_call_depth = call_depth
+
+    global idc, last_created
+    fid = int(g.nodes[func_entry]["funcid"])
+    if max_call_depth - cur_depth >= max_copy_depth and fid in last_created:
+        # no copy
+        return last_created[fid][0], last_created[fid][1], max_call_depth
+    else:
+        # copy
+        id_translation = {}
+        # assert visited == all nodes with funcid = fid
+        # assert intra_edges == all edges with nodes that have funcid =
+        # fid
+        # assert interproc_edges == all edges with one node that has
+        # funcid == fid && node["type"] !=
+        # "CFG_FUNC_ENTRY"/"CFG_FUNC_EXIT"
+        global id_map
+        for n in visited:
+            id_translation[n] = idc
+            id_map[idc] = n
+            idc += 1
+
+        for (start, end) in intra_edges:
+            write_datalog_edge(id_translation[start], id_translation[end])
+        for (arg_entry, call_entry) in inter_entries:
+            write_datalog_edge(id_translation[arg_entry], call_entry)
+        for (call_exit, arg_exit) in inter_exits:
+            write_datalog_edge(call_exit, id_translation[arg_exit])
+        for n in non_killing_nodes:
+            write_datalog_nonkilling_stmt(id_translation[n])
+
+        last_created[fid] = (id_translation[func_entry], id_translation[func_exit])
+        return id_translation[func_entry], id_translation[func_exit], max_call_depth
+
 # funcid -> (entry, exit)
 last_created = {}
 def write_copied_cfg(g, func_entry, max_depth, cur_depth=0):
-    global idc, last_created
+    global idc, last_created, id_map
 
     # orig id -> new id
     id_translation = {func_entry : idc}
@@ -154,17 +258,13 @@ def write_copied_cfg(g, func_entry, max_depth, cur_depth=0):
     while work:
         cur = work.pop()
         for s in g.adj[cur]:
-            #if s == func_exit: continue
-
             e = g.get_edge_data(cur, s)[0]
 
             if e["label"] == "INTERPROC":
                 arg_exit = e["exit_id"]
 
-                #assert e["type"] == "entry" and \
-                #        arg_exit not in id_translation
-                if arg_exit in id_translation:
-                    import pdb; pdb.set_trace()
+                assert e["type"] == "entry" and \
+                        arg_exit not in id_translation
 
                 id_translation[arg_exit] = idc
                 id_map[idc] = arg_exit
