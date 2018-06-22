@@ -68,27 +68,42 @@ def profile_memory():
     print('Maximum memory usage: %s' % max(mem_usage))
 
 def write_datalog_edge(start, end):
-    global datalog_fd
-    global g
-    global id_map
-    datalog_fd.write("(rule (po #x%08x #x%08x))\n" % (start, end))
+    global datalog_fd, out_format
+    #global g
+    #global id_map
+    if out_format == "smt2":
+        datalog_fd.write("(rule (po #x%08x #x%08x))\n" % (start, end))
             #(start, end, g.nodes[id_map[start]]["type"], g.nodes[id_map[end]]["type"]))
+    elif out_format == "souffle":
+        datalog_fd.write("edge(%d,%d).\n" % (start, end))
 
 def write_datalog_def(stmt_id, var_id):
     global datalog_fd
-    datalog_fd.write("(rule (def #x%08x #x%08x))\n" % (stmt_id, var_id))
+    if out_format == "smt2":
+        datalog_fd.write("(rule (def #x%08x #x%08x))\n" % (stmt_id, var_id))
+    elif out_format == "souffle":
+        datalog_fd.write("def(%d,%d).\n" % (stmt_id, var_id))
 
 def write_datalog_use(stmt_id, var_id):
     global datalog_fd
-    datalog_fd.write("(rule (use #x%08x #x%08x))\n" % (stmt_id, var_id))
+    if out_format == "smt2":
+        datalog_fd.write("(rule (use #x%08x #x%08x))\n" % (stmt_id, var_id))
+    elif out_format == "souffle":
+        datalog_fd.write("use(%d,%d).\n" % (stmt_id, var_id))
 
 def write_datalog_sink(i):
     global datalog_fd
-    datalog_fd.write("(rule (sink #x%08x))\n" % (i))
+    if out_format == "smt2":
+        datalog_fd.write("(rule (sink #x%08x))\n" % (i))
+    elif out_format == "souffle":
+        datalog_fd.write("sink(%d).\n" % (i))
 
 def write_datalog_source(i):
     global datalog_fd
-    datalog_fd.write("(rule (source #x%08x))\n" % (i))
+    if out_format == "smt2":
+        datalog_fd.write("(rule (source #x%08x))\n" % (i))
+    elif out_format == "souffle":
+        datalog_fd.write("source(%d).\n" % (i))
 
 def write_datalog_node_def_use():
     global idc
@@ -102,6 +117,21 @@ def write_datalog_node_def_use():
             write_datalog_def(i, var_map[d])
         for u in stmt_uses.get(orig_id, []):
             write_datalog_use(i, var_map[u])
+
+def write_datalog_nonkilling_stmt(stmt_id):
+    global datalog_fd, out_format
+    if out_format == "smt2":
+        raise Exception("not implemented")
+    elif out_format == "souffle":
+        datalog_fd.write("nokill(%d).\n" % (stmt_id))
+
+def write_datalog_nonkilling_args(g, call_id, id_translation):
+    for n, _ in filter(
+            lambda (_, d): 
+            d["type"] == "arg_entry" and
+            d["call_id"] == call_id,
+            g.nodes(data=True)):
+        write_datalog_nonkilling_stmt(id_translation[n])
 
 # funcid -> (entry, exit)
 last_created = {}
@@ -145,10 +175,13 @@ def write_copied_cfg(g, func_entry, max_depth, cur_depth=0):
                     assert s == func_entry
                     write_datalog_edge(id_translation[cur], id_translation[s])
                     write_datalog_edge(id_translation[func_exit], id_translation[arg_exit])
+                    # don't kill the param definitions of the parent
+                    # call
+                    write_datalog_nonkilling_args(g, g.nodes[cur]["call_id"], id_translation)
                 else:
                     # regular function call
                     fid = int(g.nodes[s]["funcid"])
-                    if cur_depth <= max_depth or fid not in last_created:
+                    if cur_depth < max_depth or fid not in last_created:
                         # copy if we are not at max depth, or if copy
                         # does not already exist
                         call_entry, call_exit = write_copied_cfg(g, s, max_depth, cur_depth + 1)
@@ -199,17 +232,24 @@ def save_maps():
     global var_map
     out_fd = open("tmp/var_map.csv", "w+")
     for name, i in var_map.iteritems():
-        out_fd.write(str(i) + "," + name + "\n")
+        out_fd.write("%x,%s\n" % (i, name))
     out_fd.close()
 
+def sqmail_entries(g):
+    return filter(
+            lambda (_, x): "name" in x and \
+                    x["name"].endswith("read_body.php") and \
+                    x["type"] == "CFG_FUNC_ENTRY",
+            g.nodes(data=True))
 
 idc = 0
 # copied id -> orig id
 id_map = {}
-datalog_fd = open("tmp/facts.smt", "w+")
+datalog_fd = open("tmp/facts", "w+")
 g = None
 copied_funcs = 0
 unique_funcs = set()
+out_format = "souffle"
 def main():
     global datalog_fd, copied_funcs
     global g
@@ -217,11 +257,9 @@ def main():
     load_sinks()
     load_sources()
     load_def_use_info()
-
     g = graph_from_json()
-    write_copied_cfg(g, 8844, 0)
-    print "Total funcs: " + str(copied_funcs)
-    print "Unique funcs: " + str(len(unique_funcs))
+    entry = sqmail_entries(g)[0][0]
+    write_copied_cfg(g, entry, 0)
     write_datalog_node_def_use()
     write_datalog_sinks_and_sources()
 
