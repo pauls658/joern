@@ -53,9 +53,18 @@ def load_def_use_info():
         var_id += 1
 
 sinks = set()
+safe_sinks = set()
+tainted_sinks = set()
 def load_sinks():
     global sinks
     sinks.update(json.load(open("tmp/sinks.json", "rb"))["results"][0]["data"][0]["row"][0])
+
+def load_testcase_sinks():
+    global sinks, safe_sinks, tainted_sinks
+    safe_sinks.update(json.load(open("tmp/safe_sinks.json", "rb"))["results"][0]["data"][0]["row"][0])
+    tainted_sinks.update(json.load(open("tmp/tainted_sinks.json", "rb"))["results"][0]["data"][0]["row"][0])
+    sinks.update(safe_sinks)
+    sinks.update(tainted_sinks)
 
 sources = set()
 def load_sources():
@@ -97,6 +106,20 @@ def write_datalog_sink(i):
         datalog_fd.write("(rule (sink #x%08x))\n" % (i))
     elif out_format == "souffle":
         datalog_fd.write("sink(%d).\n" % (i))
+
+def write_datalog_tainted_sink(i):
+    global datalog_fd
+    if out_format == "smt2":
+        datalog_fd.write("(rule (gold_tainted_sink #x%08x))\n" % (i))
+    elif out_format == "souffle":
+        datalog_fd.write("gold_tainted_sink(%d).\n" % (i))
+
+def write_datalog_safe_sink(i):
+    global datalog_fd
+    if out_format == "smt2":
+        datalog_fd.write("(rule (safe_sink #x%08x))\n" % (i))
+    elif out_format == "souffle":
+        datalog_fd.write("safe_sink(%d).\n" % (i))
 
 def write_datalog_source(i):
     global datalog_fd
@@ -140,7 +163,7 @@ def get_argentries_for_callid(g, call_id):
             d["call_id"] == call_id,
             g.nodes(data=True))]
 
-def write_bounded_copied_cfg(g, func_entry, max_call_depth, cur_depth=0):
+def write_bounded_copied_cfg(g, func_entry, max_copy_depth, cur_depth=0):
     """
     params:
         - g: the graph
@@ -186,14 +209,14 @@ def write_bounded_copied_cfg(g, func_entry, max_call_depth, cur_depth=0):
                     intra_edges.add((func_exit, arg_exit))
                     # don't kill the param definitions of the parent
                     # call
-                    non_killing_nodes.add(get_argentries_for_callid(g, g.nodes[cur]["call_id"]))
+                    non_killing_nodes.update(get_argentries_for_callid(g, g.nodes[cur]["call_id"]))
                 else:
                     # regular function call, put off decision to copy
                     # until the end
-                    call_entry, call_exit, call_depth = write_bounded_copied_cfg(g, s, max_depth, cur_depth + 1)
+                    call_entry, call_exit, call_depth = write_bounded_copied_cfg(g, s, max_copy_depth, cur_depth + 1)
                     max_call_depth = max(max_call_depth, call_depth)
                     inter_entries.add((cur, call_entry))
-                    inter_exits.add((arg_exit, call_exit))
+                    inter_exits.add((call_exit, arg_exit))
                     leaf_call = False
 
             else:
@@ -203,7 +226,7 @@ def write_bounded_copied_cfg(g, func_entry, max_call_depth, cur_depth=0):
                     work.append(s)
     
     if leaf_call:
-        max_call_depth = call_depth
+        max_call_depth = cur_depth
 
     global idc, last_created
     fid = int(g.nodes[func_entry]["funcid"])
@@ -310,13 +333,17 @@ def write_copied_cfg(g, func_entry, max_depth, cur_depth=0):
     return id_translation[func_entry], id_translation[func_exit]
 
 def write_datalog_sinks_and_sources():
-    global sinks
+    global sinks, tainted_sinks, safe_sinks
     global sources
     global idc
     global id_map
     for i in range(0, idc):
         if id_map[i] in sinks:
             write_datalog_sink(i)
+            if id_map[i] in tainted_sinks:
+                write_datalog_tainted_sink(i)
+            elif id_map[i] in safe_sinks:
+                write_datalog_safe_sink(i)
         elif id_map[i] in sources:
             write_datalog_source(i)
 
@@ -342,6 +369,14 @@ def sqmail_entries(g):
                     x["type"] == "CFG_FUNC_ENTRY",
             g.nodes(data=True))
 
+def get_all_toplevel_entrys(g):
+    starts = filter(lambda (n, d): 
+            d["type"] == "CFG_FUNC_ENTRY" and
+            d["name"].endswith(".php"),
+            g.nodes(data=True))
+
+    return map(lambda (n, d): n, starts)
+
 idc = 0
 # copied id -> orig id
 id_map = {}
@@ -350,6 +385,24 @@ g = None
 copied_funcs = 0
 unique_funcs = set()
 out_format = "souffle"
+def testcases():
+    global datalog_fd, copied_funcs
+    global g
+
+    load_sinks()
+    load_testcase_sinks()
+    load_sources()
+    load_def_use_info()
+    g = graph_from_json()
+    entries = get_all_toplevel_entrys(g)
+    for entry in entries:
+        write_bounded_copied_cfg(g, entry, 1)
+    write_datalog_node_def_use()
+    write_datalog_sinks_and_sources()
+    save_maps()
+
+    datalog_fd.close()
+
 def main():
     global datalog_fd, copied_funcs
     global g
@@ -369,3 +422,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    #testcases()
