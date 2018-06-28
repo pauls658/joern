@@ -6,6 +6,8 @@ import java.util.HashSet;
 
 import udg.ASTProvider;
 import udg.ASTNodeASTProvider;
+import udg.useDefAnalysis.ASTDefUseAnalyzer;
+import udg.php.useDefAnalysis.PHPASTDefUseAnalyzer;
 import ast.ASTNode;
 import udg.useDefAnalysis.environments.EmitDefAndUseEnvironment;
 import udg.useDefGraph.UseOrDef;
@@ -52,22 +54,24 @@ public class ArgumentListEnvironment extends EmitDefAndUseEnvironment
 	public boolean isDef( ASTProvider child)
 	{
 		return true;
-		/**
-		ASTNodeASTProvider c = (ASTNodeASTProvider)child;
-		if (this.name == null || !this.nonDefingFunctions.contains(this.name)) {
-			// Def all the args
-			return c.getASTNode().getProperty("type").equals("AST_ARG_LIST");
-		} else {
-			// this is a built-in func, and we know it does not def anything
-			return false;
-		}
-		*/
 	}
 	
 	@Override
 	public boolean isUse( ASTProvider child)
 	{
 		return true;
+	}
+
+	@Override
+	public void preTraverse(ASTDefUseAnalyzer analyzer) {
+		PHPASTDefUseAnalyzer phpAnalyzer = (PHPASTDefUseAnalyzer)analyzer;
+		phpAnalyzer.pushArgListId(getNodeId());
+	}
+
+	@Override
+	public void postTraverse(ASTDefUseAnalyzer analyzer) {
+		PHPASTDefUseAnalyzer phpAnalyzer = (PHPASTDefUseAnalyzer)analyzer;
+		phpAnalyzer.popArgListId();
 	}
 
 }
