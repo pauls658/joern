@@ -24,6 +24,28 @@ def graph_from_json():
 
     return g
 
+def only_FLOWSTO_edges(g, n):
+    return g.out_degree(nbunch=n) > 0 and \
+            g.in_degree(nbunch=n) > 0 and \
+            all([d["label"] == "FLOWS_TO" for u, v, d in g.in_edges(nbunch=n, data=True)]) and \
+            all([d["label"] == "FLOWS_TO" for u, v, d in g.out_edges(nbunch=n, data=True)])
+
+def remove_node(g, n, label):
+    preds = map(lambda e: e[0], g.in_edges(nbunch=n))
+    succs = map(lambda e: e[1], g.out_edges(nbunch=n))
+    for p in preds:
+        for s in succs:
+            g.add_edge(p, s, label=label)
+    g.remove_node(n)
+
+def preprocesses_graph(g):
+    for n, d in g.nodes(data=True):
+        if "uses" not in d and \
+        "defs" not in d and \
+        only_FLOWSTO_edges(g, n):
+            changed = True
+            remove_node(g, n, "FLOWS_TO")
+
 stmt_defs = {}
 stmt_uses = {}
 var_map = {}
@@ -489,6 +511,7 @@ def main():
     load_sources()
     load_def_use_info()
     g = graph_from_json()
+    preprocesses_graph(g)
     entry = sqmail_entries(g)[0][0]
     depth = 6
     print "write_bounded_copied_cfg to depth %d" % (depth)
