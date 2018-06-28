@@ -4,7 +4,12 @@ import java.util.Collection;
 import java.util.LinkedList;
 
 import udg.ASTProvider;
+import udg.ASTNodeASTProvider;
+import ast.ASTNode;
 import udg.useDefGraph.UseOrDef;
+
+// Brandon
+import udg.useDefAnalysis.ASTDefUseAnalyzer;
 
 /**
  * Base-class and default implementation of UseDefEnvironment.
@@ -15,8 +20,8 @@ public class UseDefEnvironment
 	protected ASTProvider astProvider;
 	protected LinkedList<String> symbols = new LinkedList<String>();
 
-	static final LinkedList<UseOrDef> emptyUseOrDef = new LinkedList<UseOrDef>();
-	static final LinkedList<String> emptySymbolList = new LinkedList<String>();
+	public static final LinkedList<UseOrDef> emptyUseOrDef = new LinkedList<UseOrDef>();
+	public static final LinkedList<String> emptySymbolList = new LinkedList<String>();
 
 	public boolean isUse(ASTProvider child)
 	{
@@ -100,4 +105,20 @@ public class UseDefEnvironment
 		return retval;
 	}
 
-};
+	// Brandon
+	
+	public void preTraverse(ASTDefUseAnalyzer analyzer) {
+		return;
+	}
+
+
+	public void postTraverse(ASTDefUseAnalyzer analyzer) {
+		return;
+	}
+
+	public Long getNodeId() {
+		ASTNodeASTProvider prov = (ASTNodeASTProvider)this.astProvider; // I like to live dangerously...
+		return prov.getASTNode().getNodeId();
+	}
+
+}

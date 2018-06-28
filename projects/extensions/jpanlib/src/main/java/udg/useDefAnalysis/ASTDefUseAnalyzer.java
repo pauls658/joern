@@ -59,8 +59,11 @@ public abstract class ASTDefUseAnalyzer
 		for (int i = 0; i < numChildren; i++)
 		{
 			ASTProvider childProvider = astProvider.getChild(i);
-			if( env.shouldTraverse(childProvider))
+			if( env.shouldTraverse(childProvider)) {
+				env.preTraverse(this);
 				traverseAST(childProvider);
+				env.postTraverse(this);
+			}
 
 			useDefsOfBlock.addAll(env.useOrDefsFromSymbols(childProvider));
 		}
