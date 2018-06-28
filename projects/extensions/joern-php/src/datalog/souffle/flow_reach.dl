@@ -1,0 +1,35 @@
+.decl edge(start:number, end:number)
+.decl def(stmt:number, var:number)
+.decl use(stmt:number, var:number)
+.decl source(stmt:number)
+.decl sink(stmt:number)
+.decl tainted(stmt:number)
+.decl tainted_sink(stmt:number)
+.decl nokill(stmt:number)
+.decl gold_tainted_sink(stmt:number)
+.decl safe_sink(stmt:number)
+.decl unreachable_tainted_sink(stmt:number)
+.decl reachable_safe_sink(stmt:number)
+
+.decl path(start:number, end:number)
+.decl reachable(stmt:number)
+
+.input edge(IO=file, filename="out_edge.csv")
+.input def(IO=file, filename="out_def.csv")
+.input use(IO=file, filename="out_use.csv")
+.input source(IO=file, filename="out_source.csv")
+.input sink(IO=file, filename="out_sink.csv")
+.input safe_sink(IO=file, filename="out_safe_sink.csv")
+.input nokill(IO=file, filename="out_nokill.csv")
+
+path(355751, end) :- edge(355751, end).
+path(355751, end) :- path(355751, mid), edge(mid, end).
+reachable(stmt) :- path(355751, stmt).
+reachable_safe_sink(stmt) :- path(355751, stmt), safe_sink(stmt).
+
+//
+//path(start, end) :- source(start), edge(start, end).
+//path(start, end) :- path(start, mid), edge(mid, end).
+//reachable(stmt) :- source(start), path(start, stmt).
+.output reachable
+.output reachable_safe_sink

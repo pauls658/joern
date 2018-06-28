@@ -5,6 +5,6 @@ if [[ -z $1 ]]; then
 	exit 1
 fi
 
-res=$( cat $1 | cypher-shell -u neo4j -p " " --format plain --non-interactive )
+res=$( cat $1 | cypher-shell -u neo4j -p " " )
 
-echo "$res" > `dirname $0`/prev.csv
+echo "$res" | grep -E "[0-9]"  > `dirname $0`/prev.csv

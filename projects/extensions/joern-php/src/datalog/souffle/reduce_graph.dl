@@ -1,0 +1,44 @@
+.decl edge(start:number, end:number)
+.decl def(stmt:number, var:number)
+.decl use(stmt:number, var:number)
+.decl source(stmt:number)
+.decl sink(stmt:number)
+.decl nokill(stmt:number)
+
+.decl out_edge(start:number, end:number)
+.decl out_def(stmt:number, var:number)
+.decl out_use(stmt:number, var:number)
+.decl out_source(stmt:number)
+.decl out_sink(stmt:number)
+.decl out_safe_sink(stmt:number)
+.decl out_nokill(stmt:number)
+
+.decl tainted(stmt:number)
+.decl tainted_sink(stmt:number)
+.decl gold_tainted_sink(stmt:number)
+.decl safe_sink(stmt:number)
+.decl unreachable_tainted_sink(stmt:number)
+.decl reachable_safe_sink(stmt:number)
+
+.decl path(start:number, end:number)
+.decl reachable(stmt:number)
+
+path(start, end) :- edge(start, end), source(start).
+path(start, end) :- path(start, mid), edge(mid, end).
+reachable(stmt) :- path(start, stmt), source(start).
+
+out_edge(start, end) :- edge(start, end), reachable(start), reachable(end).
+out_def(stmt, var) :- def(stmt, var), reachable(stmt).
+out_use(stmt, var) :- use(stmt, var), reachable(stmt).
+out_source(stmt) :- source(stmt), reachable(stmt).
+out_sink(stmt) :- sink(stmt), reachable(stmt).
+out_nokill(stmt) :- nokill(stmt), reachable(stmt).
+out_safe_sink(stmt) :- safe_sink(stmt), reachable(stmt).
+
+.output out_edge
+.output out_def
+.output out_use
+.output out_source
+.output out_sink
+.output out_nokill
+.output out_safe_sink

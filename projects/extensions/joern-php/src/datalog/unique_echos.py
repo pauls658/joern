@@ -2,11 +2,11 @@ import json
 
 def load_echos():
     echos = set()
-    echos.update(json.load(open("echos.json", "rb"))["results"][0]["data"][0]["row"][0])
+    echos.update(json.load(open("tmp/sinks.json", "rb"))["results"][0]["data"][0]["row"][0])
     return echos
 
 def load_id_map():
-    fd = open("id_map.csv", "r")
+    fd = open("tmp/id_map.csv", "r")
     id_map = {}
     for line in fd:
         new, orig = map(int, line.strip().split(","))
@@ -33,11 +33,21 @@ def read_dl_results():
         fact = read3lines(fd)
     return reachables
 
+def load_souffle_res():
+    s = set()
+    fd = open("tainted_sink.csv", "r")
+    for line in fd:
+        s.add(int(line.strip()))
+    return s
+
 def main():
     id_map = load_id_map()
-    reachables = set(map(lambda x: id_map[x], read_dl_results()))
+    mapped_echos = set(map(lambda x: id_map[x], load_souffle_res()))
     echos = load_echos()
-    print len(reachables & echos)
+    if mapped_echos - echos:
+        print "Something is wonky"
+    else:
+        print len(mapped_echos)
 
 if __name__ == "__main__":
     main()

@@ -1,0 +1,39 @@
+.decl edge(start:number, end:number)
+.decl def(stmt:number, var:number)
+.decl use(stmt:number, var:number)
+.decl source(stmt:number)
+.decl sink(stmt:number)
+.decl tainted(stmt:number)
+.decl tainted_sink(stmt:number)
+.decl nokill(stmt:number)
+
+.input edge(IO=file, filename="out_edge.csv")
+.input def(IO=file, filename="out_def.csv")
+.input use(IO=file, filename="out_use.csv")
+.input source(IO=file, filename="out_source.csv")
+.input sink(IO=file, filename="out_sink.csv")
+.input nokill(IO=file, filename="out_nokill.csv")
+
+.decl livedef(var:number, def_stmt:number, this_stmt:number)
+
+// only init liveness for source variables
+livedef(def_stmt, var, def_stmt) :- def(def_stmt, var), source(def_stmt).
+
+// propogate liveness for initial source
+livedef(prev_stmt, var, this_stmt) :- livedef(prev_stmt, var, prev_stmt), edge(prev_stmt, this_stmt).
+
+// propogate liveness until we reach an assignment
+livedef(def_stmt, var, this_stmt) :- livedef(def_stmt, var, prev_stmt), edge(prev_stmt, this_stmt), !def(prev_stmt, var).
+livedef(def_stmt, var, this_stmt) :- livedef(def_stmt, var, prev_stmt), edge(prev_stmt, this_stmt), nokill(prev_stmt).
+
+// statements that use a live def are tainted
+tainted(this_stmt) :- livedef(def_stmt, var, this_stmt), use(this_stmt, var).
+
+// make a livedef for each def'd variable at a tainted statement
+livedef(def_stmt, var, def_stmt) :- tainted(def_stmt), def(def_stmt, var).
+
+// get tainted sinks
+tainted_sink(this_stmt) :- sink(this_stmt), tainted(this_stmt).
+
+
+.output tainted_sink

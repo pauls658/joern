@@ -163,6 +163,56 @@ def get_argentries_for_callid(g, call_id):
             d["call_id"] == call_id,
             g.nodes(data=True))]
 
+func_depth = {}
+def calc_func_depths(g, func_entry, cur_depth=0):
+    global func_depth
+
+    if func_entry in func_depth:
+        return func_depth[func_entry]
+
+    func_exit = int(g.nodes[func_entry]["exit_id"])
+
+    visited = set([func_exit]) # un-translated ids of nodes who's successors we have processed
+    work = [func_entry] # added to visited on first iter
+    while work:
+        cur = work.pop()
+        if cur in visited: continue
+        visited.add(cur)
+        for s in g.adj[cur]:
+
+            e = g.get_edge_data(cur, s)[0]
+            if e["label"] == "INTERPROC":
+                arg_exit = e["exit_id"]
+
+                assert e["type"] == "entry" and \
+                        arg_exit not in visited
+               
+                # the only way to the arg_exit is through the function,
+                # regardless if this is a recursive call or not
+                work.append(arg_exit)
+
+                if s in visited:
+                    # recursion
+                    pass
+                else:
+                    # regular function call, put off decision to copy
+                    # until the end
+                    call_depth = calc_func_depths(g, s, cur_depth + 1)
+                    max_call_depth = max(max_call_depth, call_depth)
+                    leaf_call = False
+
+            else:
+                if s not in visited:
+                    # haven't processed this node's successors
+                    work.append(s)
+    if leaf_call:
+        max_call_depth = cur_depth
+   
+    func_depth[func_entry] = max_call_depth
+
+    return max_call_depth
+
+
 def write_bounded_copied_cfg(g, func_entry, max_copy_depth, cur_depth=0):
     """
     params:
@@ -188,6 +238,7 @@ def write_bounded_copied_cfg(g, func_entry, max_copy_depth, cur_depth=0):
     work = [func_entry] # added to visited on first iter
     while work:
         cur = work.pop()
+        if cur in visited: continue
         visited.add(cur)
         for s in g.adj[cur]:
 
@@ -355,11 +406,11 @@ def save_maps():
         out_fd.write(str(i) + "," + str(id_map[i]) + "\n")
     out_fd.close()
 
-    # dont need this actually
+    # for debugging
     global var_map
     out_fd = open("tmp/var_map.csv", "w+")
     for name, i in var_map.iteritems():
-        out_fd.write("%x,%s\n" % (i, name))
+        out_fd.write("%d,%s\n" % (i, name))
     out_fd.close()
 
 def sqmail_entries(g):
@@ -403,6 +454,33 @@ def testcases():
 
     datalog_fd.close()
 
+def debug():
+    global datalog_fd, copied_funcs
+    global g
+
+    load_sinks()
+    load_testcase_sinks()
+    load_sources()
+    load_def_use_info()
+    g = graph_from_json()
+    entry = sqmail_entries(g)[0][0]
+    depth = 6
+    print "write_bounded_copied_cfg to depth %d" % (depth)
+    write_bounded_copied_cfg(g, entry, depth)
+    write_datalog_node_def_use()
+    write_datalog_sinks_and_sources()
+    save_maps()
+
+    datalog_fd.close()
+
+# Dear elves,
+# I'm impressed with your ability to cause me days
+# of frustration with such small changes to my code.
+# I propose an alliance. In return, I grant you 
+# bouncing privileges on my big blue/gray exercise ball.
+# I eagerly await your response.
+# Sincerely,
+#   Brandon
 def main():
     global datalog_fd, copied_funcs
     global g
@@ -412,7 +490,10 @@ def main():
     load_def_use_info()
     g = graph_from_json()
     entry = sqmail_entries(g)[0][0]
-    write_copied_cfg(g, entry, 0)
+    depth = 6
+    print "write_bounded_copied_cfg to depth %d" % (depth)
+    write_bounded_copied_cfg(g, entry, depth)
+    #write_copied_cfg(g, entry, 20)
     write_datalog_node_def_use()
     write_datalog_sinks_and_sources()
 
@@ -422,4 +503,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+    #debug()
     #testcases()

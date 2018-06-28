@@ -1,0 +1,20 @@
+// input facts
+.decl edge(start:number, end:number)
+.decl def(stmt:number, var:number)
+.decl use(stmt:number, var:number)
+.decl source(stmt:number)
+.decl sink(stmt:number)
+.decl nokill(stmt:number)
+
+// derived facts
+.decl path(start:number, end:number)
+.decl assign(lside:number, rside:number)
+.decl tainted(stmt:number)
+.decl tainted_sink(stmt:number)
+.output path
+
+// rules
+path(start, end) :- edge(start, end). 
+path(start, end) :- path(start, conn), path(conn, end). 
+
+//assign(lside, rside) :- def(stmt, lside), use(stmt, rside).

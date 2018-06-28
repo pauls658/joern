@@ -1,0 +1,39 @@
+.decl edge(start:number, end:number)
+.decl def(stmt:number, var:number)
+.decl use(stmt:number, var:number)
+.decl source(stmt:number)
+.decl sink(stmt:number)
+.decl tainted(stmt:number)
+.decl tainted_sink(stmt:number)
+.decl nokill(stmt:number)
+.decl gold_tainted_sink(stmt:number)
+.decl safe_sink(stmt:number)
+.decl unreachable_tainted_sink(stmt:number)
+.decl reachable_safe_sink(stmt:number)
+
+.decl livedef(var:number, def_stmt:number, this_stmt:number)
+.output unreachable_tainted_sink
+.output reachable_safe_sink
+
+// only init liveness for source variables
+livedef(def_stmt, var, def_stmt) :- def(def_stmt, var), source(def_stmt).
+
+// propogate liveness for initial source
+livedef(prev_stmt, var, this_stmt) :- livedef(prev_stmt, var, prev_stmt), edge(prev_stmt, this_stmt).
+
+// propogate liveness until we reach an assignment
+livedef(def_stmt, var, this_stmt) :- livedef(def_stmt, var, prev_stmt), edge(prev_stmt, this_stmt), !def(prev_stmt, var).
+livedef(def_stmt, var, this_stmt) :- livedef(def_stmt, var, prev_stmt), edge(prev_stmt, this_stmt), nokill(prev_stmt).
+
+// statements that use a live def are tainted
+tainted(this_stmt) :- livedef(def_stmt, var, this_stmt), use(this_stmt, var).
+
+// make a livedef for each def'd variable at a tainted statement
+livedef(def_stmt, var, def_stmt) :- tainted(def_stmt), def(def_stmt, var).
+
+// get tainted sinks
+tainted_sink(this_stmt) :- sink(this_stmt), tainted(this_stmt).
+
+// debugging
+unreachable_tainted_sink(stmt) :- !tainted_sink(stmt), gold_tainted_sink(stmt).
+reachable_safe_sink(stmt) :- tainted_sink(stmt), safe_sink(stmt).
