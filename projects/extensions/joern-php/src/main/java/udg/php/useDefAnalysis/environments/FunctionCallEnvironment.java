@@ -15,12 +15,14 @@ public class FunctionCallEnvironment extends EmitDefAndUseEnvironment
 
 	private HashSet<String> nonDefingFunctions;
 	private String name;
+	private String type;
 
 	public FunctionCallEnvironment(HashSet<String> in, ASTProvider aProv) {
 		this.nonDefingFunctions = in;
 		ASTNodeASTProvider func = (ASTNodeASTProvider)aProv;
 		ASTNode a = func.getASTNode();
-		if (a.getProperty("type").equals("AST_CALL")) {
+		this.type = a.getProperty("type");
+		if (this.type.equals("AST_CALL")) {
 			a = a.getChild(0); // the name
 			if (a.getProperty("type").equals("AST_NAME")) {
 				a = a.getChild(0);
@@ -62,7 +64,8 @@ public class FunctionCallEnvironment extends EmitDefAndUseEnvironment
 	@Override
 	public boolean isDef( ASTProvider child)
 	{
-		return true;
+		// def/uses of args happen in the arg list environment
+		return false;
 		/**
 		ASTNodeASTProvider c = (ASTNodeASTProvider)child;
 		if (this.name == null || !this.nonDefingFunctions.contains(this.name)) {
@@ -78,7 +81,12 @@ public class FunctionCallEnvironment extends EmitDefAndUseEnvironment
 	@Override
 	public boolean isUse( ASTProvider child)
 	{
-		return true;
+		// If we do field sensitive analysis and this is a method call, we may want
+		// to output "use" for childnum == 0 (the reference variable). Currently,
+		// we do field-based analysis so we can skip this.
+		// If this is a function reference (function call using a variable), we don't
+		// care because we don't consider functions to be tainted.
+		return false;
 	}
 
 }
