@@ -25,11 +25,13 @@ import udg.php.useDefAnalysis.environments.PropertyEnvironment;
 import udg.php.useDefAnalysis.environments.StaticPropertyEnvironment;
 import udg.php.useDefAnalysis.environments.StaticVariableDeclarationEnvironment;
 import udg.php.useDefAnalysis.environments.SwitchEnvironment;
+import udg.php.useDefAnalysis.environments.BaseExpressionEnvironment;
 import udg.useDefAnalysis.environments.UseDefEnvironment;
 import udg.php.useDefAnalysis.environments.VariableEnvironment;
 import udg.useDefGraph.UseOrDef;
 
 import java.util.HashSet;
+import java.util.Stack;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -44,6 +46,7 @@ public class PHPASTDefUseAnalyzer extends ASTDefUseAnalyzer
 	// Determines whether we want to analyze a predicate or a normal statement
 	private boolean analyzingPredicate = false;
 	private HashSet<String> nonDefingFunctions;
+	private Stack<Long> argListStack;
 
 	public PHPASTDefUseAnalyzer() {
 		this.nonDefingFunctions = new HashSet<String>();
@@ -59,6 +62,7 @@ public class PHPASTDefUseAnalyzer extends ASTDefUseAnalyzer
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
+		argListStack = new Stack<Long>();
 	}
 	/**
 	 * Analyze an AST as usual. In case analyzeAST(ASTProvider) was called
@@ -182,9 +186,11 @@ public class PHPASTDefUseAnalyzer extends ASTDefUseAnalyzer
 			// be used as standalone expressions as a predicate, i.e., within
 			// the guard of some if/while/etc. statement
 			case "UnaryOperationExpression":
-			case "BinaryOperationExpression":
 			case "InstanceofExpression":
 				return new EmitUseEnvironment();
+
+			case "BinaryOperationExpression":
+				return new BaseExpressionEnvironment();
 
 			case "CallExpressionBase":
 			case "MethodCallExpression":
@@ -280,5 +286,17 @@ public class PHPASTDefUseAnalyzer extends ASTDefUseAnalyzer
 
 	public void setPredicate( boolean analyzingPredicate) {
 		this.analyzingPredicate = analyzingPredicate;
+	}
+
+	public void pushArgListId(Long id) {
+		argListStack.push(id);
+	}
+	
+	public void popArgListId() {
+		argListStack.pop();
+	}
+
+	public boolean analyzingArgList() {
+		return !argListStack.empty();
 	}
 }
