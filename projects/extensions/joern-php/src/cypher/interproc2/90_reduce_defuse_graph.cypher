@@ -1,4 +1,4 @@
-// Queries to be run on the finished ICFG to remove uneccessary nodes
+// Queries to be run on the finished ICFG to remove uneccessary def/uses. Later on, we remove nodes without any def/uses.
 
 // First make sure everything part of the ICFG is labeled
 match (a)-[:FLOWS_TO|INTERPROC]-() set a:BB;
@@ -9,8 +9,6 @@ where exists(a.defs) and exists(a.uses) and
 a.defs = a.uses 
 remove a.defs remove a.uses;
 
-// Remove nodes that don't have any def/use info
-// Remove intra-procedural nodes (connected only by FLOWS_TO relation)
-
-
-// Remove inter-procedural nodes (connected by INTERPROC relation)
+match (a{type:"arg_exit"})
+where "PARAM_VAL" in a.flags
+remove a.defs remove a.uses;

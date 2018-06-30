@@ -18,7 +18,9 @@ public class ConstantEnvironment extends UseDefEnvironment
 		// A Constant has exactly one Identifier child whose StringExpression child contains
 		// the constant's name.
 		String code = astProvider.getChild(0).getChild(0).getEscapedCodeStr();
-		symbols.add(code);
+		String codeLower = code.toLowerCase();
+		if (!(codeLower.equals("true") || codeLower.equals("false"))
+			symbols.add(code);
 		
 		return symbols;
 	}

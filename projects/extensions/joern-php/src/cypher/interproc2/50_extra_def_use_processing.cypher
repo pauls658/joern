@@ -19,8 +19,9 @@ match
 where
 aentry.childnum = aexit.childnum and 
 aentry.childnum = param.childnum 
-set 
-aentry.defs = param.defs set aexit.uses = param.defs;
+set aentry.defs = param.defs
+set aexit.uses = param.defs 
+set aexit.flags = coalesce(param.flags, ["PARAM_VAL"]);
 
 // remove AST global defs
 match
