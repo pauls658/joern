@@ -39,12 +39,15 @@ def remove_node(g, n, label):
     g.remove_node(n)
 
 def preprocesses_graph(g):
+    orig_node_count = g.order()
     for n, d in g.nodes(data=True):
         if "uses" not in d and \
         "defs" not in d and \
         only_FLOWSTO_edges(g, n):
             changed = True
             remove_node(g, n, "FLOWS_TO")
+
+    print "Reduced graph to %0.2f%% original size" % ((float(g.order())/float(orig_node_count))*100)
 
 stmt_defs = {}
 stmt_uses = {}
@@ -190,9 +193,11 @@ def calc_func_depths(g, func_entry, cur_depth=0):
     global func_depth
 
     if func_entry in func_depth:
-        return func_depth[func_entry]
+        return (func_depth[func_entry] - 1) + cur_depth
 
     func_exit = int(g.nodes[func_entry]["exit_id"])
+    leaf_call = True
+    max_call_depth = 0
 
     visited = set([func_exit]) # un-translated ids of nodes who's successors we have processed
     work = [func_entry] # added to visited on first iter
@@ -217,8 +222,7 @@ def calc_func_depths(g, func_entry, cur_depth=0):
                     # recursion
                     pass
                 else:
-                    # regular function call, put off decision to copy
-                    # until the end
+                    # regular function call
                     call_depth = calc_func_depths(g, s, cur_depth + 1)
                     max_call_depth = max(max_call_depth, call_depth)
                     leaf_call = False
@@ -230,11 +234,13 @@ def calc_func_depths(g, func_entry, cur_depth=0):
     if leaf_call:
         max_call_depth = cur_depth
    
-    func_depth[func_entry] = max_call_depth
+    func_depth[func_entry] = (max_call_depth - cur_depth) + 1
 
     return max_call_depth
 
 
+# funcid -> (entry, exit)
+last_created = {}
 def write_bounded_copied_cfg(g, func_entry, max_copy_depth, cur_depth=0):
     """
     params:
@@ -333,10 +339,14 @@ def write_bounded_copied_cfg(g, func_entry, max_copy_depth, cur_depth=0):
         last_created[fid] = (id_translation[func_entry], id_translation[func_exit])
         return id_translation[func_entry], id_translation[func_exit], max_call_depth
 
-# funcid -> (entry, exit)
-last_created = {}
-def write_copied_cfg(g, func_entry, max_depth, cur_depth=0):
-    global idc, last_created, id_map
+def write_copied_cfg(g, func_entry, max_depth):
+    global idc, last_created, id_map, func_depth
+
+    if func_depth[func_entry] >= max_depth and func_entry in last_created:
+        # no copy
+        return last_created[func_entry]
+
+    # copy
 
     # orig id -> new id
     id_translation = {func_entry : idc}
@@ -348,7 +358,7 @@ def write_copied_cfg(g, func_entry, max_depth, cur_depth=0):
     id_map[idc] = func_exit
     idc += 1
     
-    last_created[int(g.nodes[func_entry]["funcid"])] = (id_translation[func_entry], id_translation[func_exit])
+    last_created[func_entry] = (id_translation[func_entry], id_translation[func_exit])
 
     work = [func_entry]
     while work:
@@ -376,16 +386,10 @@ def write_copied_cfg(g, func_entry, max_depth, cur_depth=0):
                     write_datalog_nonkilling_args(g, g.nodes[cur]["call_id"], id_translation)
                 else:
                     # regular function call
-                    fid = int(g.nodes[s]["funcid"])
-                    if cur_depth < max_depth or fid not in last_created:
-                        # copy if we are not at max depth, or if copy
-                        # does not already exist
-                        call_entry, call_exit = write_copied_cfg(g, s, max_depth, cur_depth + 1)
-                        write_datalog_edge(id_translation[cur], call_entry)
-                        write_datalog_edge(call_exit, id_translation[arg_exit])
-                    else:
-                        write_datalog_edge(id_translation[cur], last_created[fid][0])
-                        write_datalog_edge(last_created[fid][1], id_translation[arg_exit])
+                    call_entry, call_exit = write_copied_cfg(g, s, max_depth)
+                    write_datalog_edge(id_translation[cur], call_entry)
+                    write_datalog_edge(call_exit, id_translation[arg_exit])
+
                 # the only way to the arg exit is through the function,
                 # so in either case we want to add it
                 work.append(arg_exit)
@@ -450,6 +454,16 @@ def get_all_toplevel_entrys(g):
 
     return map(lambda (n, d): n, starts)
 
+def write_func_depths():
+    global func_depth
+
+    g = graph_from_json()
+    entry = sqmail_entries(g)[0][0]
+    calc_func_depths(g, entry)
+
+    for eid, depth in func_depth.iteritems():
+        print "%s (%d): %d" % (g.nodes[eid]["name"], eid, depth)
+
 idc = 0
 # copied id -> orig id
 id_map = {}
@@ -513,10 +527,11 @@ def main():
     g = graph_from_json()
     preprocesses_graph(g)
     entry = sqmail_entries(g)[0][0]
+    calc_func_depths(g, entry)
     depth = 6
     print "write_bounded_copied_cfg to depth %d" % (depth)
-    write_bounded_copied_cfg(g, entry, depth)
-    #write_copied_cfg(g, entry, 20)
+    #write_bounded_copied_cfg(g, entry, depth)
+    write_copied_cfg(g, entry, depth)
     write_datalog_node_def_use()
     write_datalog_sinks_and_sources()
 
@@ -525,6 +540,7 @@ def main():
     datalog_fd.close()
 
 if __name__ == "__main__":
+    #write_func_depths()
     main()
     #debug()
     #testcases()
