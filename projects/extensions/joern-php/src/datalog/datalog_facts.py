@@ -102,56 +102,79 @@ def profile_memory():
     print('Maximum memory usage: %s' % max(mem_usage))
 
 def write_datalog_edge(start, end):
-    global datalog_fd, out_format
+    global out_format
     #global g
     #global id_map
     if out_format == "smt2":
+        global datalog_fd
         datalog_fd.write("(rule (po #x%08x #x%08x))\n" % (start, end))
             #(start, end, g.nodes[id_map[start]]["type"], g.nodes[id_map[end]]["type"]))
     elif out_format == "souffle":
-        datalog_fd.write("edge(%d,%d).\n" % (start, end))
+        global datalog_edge_fd
+        datalog_edge_fd.write("%d\t%d\n" % (start, end))
 
 def write_datalog_def(stmt_id, var_id):
-    global datalog_fd
+    global out_format
     if out_format == "smt2":
+        global datalog_fd
         datalog_fd.write("(rule (def #x%08x #x%08x))\n" % (stmt_id, var_id))
     elif out_format == "souffle":
-        datalog_fd.write("def(%d,%d).\n" % (stmt_id, var_id))
+        global datalog_def_fd
+        datalog_def_fd.write("%d\t%d\n" % (stmt_id, var_id))
 
 def write_datalog_use(stmt_id, var_id):
-    global datalog_fd
+    global out_format
     if out_format == "smt2":
+        global datalog_fd
         datalog_fd.write("(rule (use #x%08x #x%08x))\n" % (stmt_id, var_id))
     elif out_format == "souffle":
-        datalog_fd.write("use(%d,%d).\n" % (stmt_id, var_id))
+        global datalog_use_fd
+        datalog_use_fd.write("%d\t%d\n" % (stmt_id, var_id))
 
 def write_datalog_sink(i):
-    global datalog_fd
+    global out_format
     if out_format == "smt2":
+        global datalog_fd
         datalog_fd.write("(rule (sink #x%08x))\n" % (i))
     elif out_format == "souffle":
-        datalog_fd.write("sink(%d).\n" % (i))
+        global datalog_sink_fd
+        datalog_sink_fd.write("%d\n" % (i))
 
 def write_datalog_tainted_sink(i):
-    global datalog_fd
+    global out_format
     if out_format == "smt2":
+        global datalog_fd
         datalog_fd.write("(rule (gold_tainted_sink #x%08x))\n" % (i))
     elif out_format == "souffle":
-        datalog_fd.write("gold_tainted_sink(%d).\n" % (i))
+        global datalog_tainted_sink_fd
+        datalog_tainted_sink_fd.write("%d\n" % (i))
 
 def write_datalog_safe_sink(i):
-    global datalog_fd
+    global out_format
     if out_format == "smt2":
+        global datalog_fd
         datalog_fd.write("(rule (safe_sink #x%08x))\n" % (i))
     elif out_format == "souffle":
-        datalog_fd.write("safe_sink(%d).\n" % (i))
+        global datalog_safe_sink_fd
+        datalog_safe_sink_fd.write("%d\n" % (i))
 
 def write_datalog_source(i):
-    global datalog_fd
+    global out_format
     if out_format == "smt2":
+        global datalog_fd
         datalog_fd.write("(rule (source #x%08x))\n" % (i))
     elif out_format == "souffle":
-        datalog_fd.write("source(%d).\n" % (i))
+        global datalog_source_fd
+        datalog_source_fd.write("%d\n" % (i))
+
+def write_datalog_nonkilling_stmt(stmt_id):
+    global out_format
+    if out_format == "smt2":
+        global datalog_fd
+        raise Exception("not implemented")
+    elif out_format == "souffle":
+        global datalog_nokill_fd
+        datalog_nokill_fd.write("%d\n" % (stmt_id))
 
 def write_datalog_node_def_use():
     global idc
@@ -165,13 +188,6 @@ def write_datalog_node_def_use():
             write_datalog_def(i, var_map[d])
         for u in stmt_uses.get(orig_id, []):
             write_datalog_use(i, var_map[u])
-
-def write_datalog_nonkilling_stmt(stmt_id):
-    global datalog_fd, out_format
-    if out_format == "smt2":
-        raise Exception("not implemented")
-    elif out_format == "souffle":
-        datalog_fd.write("nokill(%d).\n" % (stmt_id))
 
 def write_datalog_nonkilling_args(g, call_id, id_translation):
     for n, _ in filter(
@@ -239,106 +255,8 @@ def calc_func_depths(g, func_entry, cur_depth=0):
     return max_call_depth
 
 
-# funcid -> (entry, exit)
+# func entry -> (entry, exit)
 last_created = {}
-def write_bounded_copied_cfg(g, func_entry, max_copy_depth, cur_depth=0):
-    """
-    params:
-        - g: the graph
-        - func_entry: the un-translated CFG_FUNC_ENTRY id
-        - max_copy_depth: the depth for when to stop copying (from the
-        bottom)
-        - cur_depth: the current size of the call stack 
-    returns:
-        - translated entry, translated exit, the maximum call depth for any
-        call stack occurring in this function
-    """
-    intra_edges = set() # edges that connect nodes strictly belonging to this function call
-    inter_entries = set() # interproc edges that enter a new func call
-    inter_exits = set() # interproc edges that exit a new func call
-    leaf_call = True # is this a leaf-node in the call graph?
-    max_call_depth = 0 # the maximum depth of any call stack that contains this function
-    non_killing_nodes = set() # nodes that don't kill any defs. usually artificial arg_entries
-
-    func_exit = int(g.nodes[func_entry]["exit_id"])
-
-    visited = set([func_exit]) # un-translated ids of nodes who's successors we have processed
-    work = [func_entry] # added to visited on first iter
-    while work:
-        cur = work.pop()
-        if cur in visited: continue
-        visited.add(cur)
-        for s in g.adj[cur]:
-
-            e = g.get_edge_data(cur, s)[0]
-            if e["label"] == "INTERPROC":
-                arg_exit = e["exit_id"]
-
-                assert e["type"] == "entry" and \
-                        arg_exit not in visited
-               
-                # the only way to the arg_exit is through the function,
-                # regardless if this is a recursive call or not
-                work.append(arg_exit)
-
-                if s in visited:
-                    # recursion
-                    assert s == func_entry
-                    intra_edges.add((cur, s))
-                    intra_edges.add((func_exit, arg_exit))
-                    # don't kill the param definitions of the parent
-                    # call
-                    non_killing_nodes.update(get_argentries_for_callid(g, g.nodes[cur]["call_id"]))
-                else:
-                    # regular function call, put off decision to copy
-                    # until the end
-                    call_entry, call_exit, call_depth = write_bounded_copied_cfg(g, s, max_copy_depth, cur_depth + 1)
-                    max_call_depth = max(max_call_depth, call_depth)
-                    inter_entries.add((cur, call_entry))
-                    inter_exits.add((call_exit, arg_exit))
-                    leaf_call = False
-
-            else:
-                intra_edges.add((cur, s))
-                if s not in visited:
-                    # haven't processed this node's successors
-                    work.append(s)
-    
-    if leaf_call:
-        max_call_depth = cur_depth
-
-    global idc, last_created
-    fid = int(g.nodes[func_entry]["funcid"])
-    if max_call_depth - cur_depth >= max_copy_depth and fid in last_created:
-        # no copy
-        return last_created[fid][0], last_created[fid][1], max_call_depth
-    else:
-        # copy
-        id_translation = {}
-        # assert visited == all nodes with funcid = fid
-        # assert intra_edges == all edges with nodes that have funcid =
-        # fid
-        # assert interproc_edges == all edges with one node that has
-        # funcid == fid && node["type"] !=
-        # "CFG_FUNC_ENTRY"/"CFG_FUNC_EXIT"
-        global id_map
-        for n in visited:
-            id_translation[n] = idc
-            id_map[idc] = n
-            idc += 1
-
-        for (start, end) in intra_edges:
-            write_datalog_edge(id_translation[start], id_translation[end])
-        for (arg_entry, call_entry) in inter_entries:
-            write_datalog_edge(id_translation[arg_entry], call_entry)
-        for (call_exit, arg_exit) in inter_exits:
-            write_datalog_edge(call_exit, id_translation[arg_exit])
-        for n in non_killing_nodes:
-            write_datalog_nonkilling_stmt(id_translation[n])
-
-        last_created[fid] = (id_translation[func_entry], id_translation[func_exit])
-        return id_translation[func_entry], id_translation[func_exit], max_call_depth
-
 def write_copied_cfg(g, func_entry, max_depth):
     global idc, last_created, id_map, func_depth
 
@@ -468,6 +386,14 @@ idc = 0
 # copied id -> orig id
 id_map = {}
 datalog_fd = open("tmp/facts", "w+")
+datalog_edge_fd = open("tmp/edge.csv", "w+")
+datalog_def_fd = open("tmp/def.csv", "w+")
+datalog_use_fd = open("tmp/use.csv", "w+")
+datalog_source_fd = open("tmp/source.csv", "w+")
+datalog_sink_fd = open("tmp/sink.csv", "w+")
+datalog_safe_sink_fd = open("tmp/safe_sink.csv", "w+")
+datalog_tainted_sink_fd = open("tmp/tainted_sink.csv", "w+")
+datalog_nokill_fd = open("tmp/nokill.csv", "w+")
 g = None
 copied_funcs = 0
 unique_funcs = set()
