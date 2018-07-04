@@ -6,7 +6,11 @@ if [[ -z $1 ]]; then
 fi
 
 # First map the actual id to the new ids
-ids=$( grep ",$1\$" tmp/id_map.csv | grep -o "^[0-9]*" )
+if [[ -z $2 ]]; then
+	ids=$( grep ",$1\$" tmp/id_map.csv | grep -o "^[0-9]*" )
+else
+	ids=$1
+fi
 
 # Second, get the var ids
 for id in $ids; do

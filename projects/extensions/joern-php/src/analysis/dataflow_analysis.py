@@ -7,8 +7,8 @@ succ = defaultdict(list) # AKA adjacent
 changed = set() # this need not be global
 GEN = defaultdict(list)
 KILL = defaultdict(list)
-IN = {}
-OUT = defaultdict(set)
+IN = defaultdict(set)
+OUT = {}
 
 # adjacency list
 # edges are (stmt, var)
@@ -44,6 +44,8 @@ def handle_use(stmt, var):
 def handle_def(stmt, var):
     global GEN
     GEN[stmt].append(var)
+    if stmt not in OUT:
+        OUT[stmt] = set()
     OUT[stmt].add((stmt, var))
     defs[var].append(stmt)
 
@@ -108,42 +110,51 @@ def load_test_data():
     #sinks.update(tainted_sinks)
     #sinks.update(safe_sinks)
 
-def IN_minus_KILL(n):
-    global IN, GEN
-    ret = set()
-    ret.update(IN[n])
+# removes definitions from cur_in that are killed by statement n
+def IN_minus_KILL(cur_in, n):
+    global GEN, defs
     
     # KILL[n] is the set of definitions
     # that define variables defined in n
     for var in GEN[n]:
-        ret.difference_update(
+        cur_in.difference_update(
                 map(lambda stmt: (stmt, var), defs[var])
         )
 
-    return ret
-
 def compute_reaching_definitions():
-    global changed, IN, GEN, OUT
-    # TODO: init OUT all of out
+    global changed, GEN, OUT
+
+    for i in changed:
+        if i not in OUT:
+            OUT[i] = set()
+
+    cur_in = set()
     #import pdb; pdb.set_trace()
     while changed:
         n = changed.pop()
 
-        IN[n] = set()
+        cur_in.clear()
         for p in pred[n]:
-            IN[n] |= OUT[p]
+            cur_in |= OUT[p]
 
-        new_out = IN_minus_KILL(n)
+        IN_minus_KILL(cur_in, n)
+        new_out = cur_in # aliasing. done for clarity
         new_out.update(
                 map(lambda var: (n, var), GEN[n])
         )
 
         if new_out != OUT[n]:
-            OUT[n] = new_out
+            OUT[n].clear()
+            OUT[n].update(new_out)
             changed.update(succ[n])
 
 def compute_defuse_relations():
-    global IN, DDG, uses
+    global IN, OUT, DDG, uses, pred
+
+    # first compute the IN sets
+    for n in pred.iterkeys():
+        for p in pred[n]:
+            IN[n] |= OUT[p]
 
     for end_stmt, reaching_defs in IN.iteritems():
         for start_stmt, var in reaching_defs:
@@ -189,13 +200,13 @@ def debug():
         print "Test failed: tainted sinks do not match reachable sinks"
         print "Tainted sinks: " + str(tainted_sinks)
         #print "Reachable sinks: " + str(reachable_sinks)
-        print "tainted - reachable: " + str(tainted_sinks - reachable_sinks)
+        print "Unreachable tainted sinks: " + str(tainted_sinks - reachable)
         #print "Reachable - Tainted: " + str(reachable_sinks - tainted_sinks)
     elif (reachable & safe_sinks):
         print "Test failed: some safe sinks were reachable"
         #print "Reachable sinks: " + str(reachable_sinks)
         print "Safe sinks: " + str(safe_sinks)
-        print "Reachable safe sinks: " + str(reachable_sinks & safe_sinks)
+        print "Reachable safe sinks: " + str(reachable & safe_sinks)
     else:
         print "Test passed! :)"
 
@@ -216,7 +227,7 @@ def CFGDFS(start=22114):
 
 def debug2():
     load_graph_data()
-    return CFGDFS()
+    print len(CFGDFS())
 
 def main():
     load_id_map()
@@ -225,8 +236,10 @@ def main():
 
     compute_reaching_definitions()
     compute_defuse_relations()
-    print compute_forward_reachability()
+    reachables, reachable_sinks = compute_forward_reachability()
+    print map(lambda x: id_map[x], reachable_sinks)
 
 if __name__ == "__main__":
-    #main()
-    debug2()
+    main()
+    #debug()
+    #debug2()

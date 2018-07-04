@@ -22,10 +22,10 @@
 .input safe_sink(IO=file, filename="out_safe_sink.csv")
 .input nokill(IO=file, filename="out_nokill.csv")
 
-path(355751, end) :- edge(355751, end).
-path(355751, end) :- path(355751, mid), edge(mid, end).
-reachable(stmt) :- path(355751, stmt).
-reachable_safe_sink(stmt) :- path(355751, stmt), safe_sink(stmt).
+path(187038, end) :- edge(187038, end).
+path(187038, end) :- path(187038, mid), edge(mid, end).
+reachable(stmt) :- path(187038, stmt).
+reachable_safe_sink(stmt) :- path(187038, stmt), safe_sink(stmt).
 
 //
 //path(start, end) :- source(start), edge(start, end).

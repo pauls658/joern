@@ -7,12 +7,12 @@
 .decl tainted_sink(stmt:number)
 .decl nokill(stmt:number)
 
-.input edge(IO=file, filename="out_edge.csv")
-.input def(IO=file, filename="out_def.csv")
-.input use(IO=file, filename="out_use.csv")
-.input source(IO=file, filename="out_source.csv")
-.input sink(IO=file, filename="out_sink.csv")
-.input nokill(IO=file, filename="out_nokill.csv")
+.input edge(IO=file, filename="tmp/edge.csv")
+.input def(IO=file, filename="tmp/def.csv")
+.input use(IO=file, filename="tmp/use.csv")
+.input source(IO=file, filename="tmp/source.csv")
+.input sink(IO=file, filename="tmp/sink.csv")
+.input nokill(IO=file, filename="tmp/nokill.csv")
 
 .decl livedef(var:number, def_stmt:number, this_stmt:number)
 
@@ -35,5 +35,5 @@ livedef(def_stmt, var, def_stmt) :- tainted(def_stmt), def(def_stmt, var).
 // get tainted sinks
 tainted_sink(this_stmt) :- sink(this_stmt), tainted(this_stmt).
 
-
+.output livedef
 .output tainted_sink

@@ -103,8 +103,10 @@ def write_graph_node_def_use():
         for u in stmt_uses.get(orig_id, []):
             write_graph_use(i, var_map[u])
 
-def write_copied_cfg(g, func_entry, depth=0):
-    global idc
+# funcid -> (entry, exit)
+last_created = {}
+def write_copied_cfg(g, func_entry, max_depth, cur_depth=0):
+    global idc, last_created
 
     # orig id -> new id
     id_translation = {func_entry : idc}
@@ -115,6 +117,8 @@ def write_copied_cfg(g, func_entry, depth=0):
     id_translation[func_exit] = idc
     id_map[idc] = func_exit
     idc += 1
+    
+    last_created[int(g.nodes[func_entry]["funcid"])] = (id_translation[func_entry], id_translation[func_exit])
 
     work = [func_entry]
     while work:
@@ -143,9 +147,16 @@ def write_copied_cfg(g, func_entry, depth=0):
                     write_graph_edge(id_translation[func_exit], id_translation[arg_exit])
                 else:
                     # regular function call
-                    call_entry, call_exit = write_copied_cfg(g, s, depth + 1)
-                    write_graph_edge(id_translation[cur], call_entry)
-                    write_graph_edge(call_exit, id_translation[arg_exit])
+                    fid = int(g.nodes[s]["funcid"])
+                    if cur_depth < max_depth or fid not in last_created:
+                        # copy if we are not at max depth, or if copy
+                        # does not already exist
+                        call_entry, call_exit = write_copied_cfg(g, s, max_depth, cur_depth + 1)
+                        write_graph_edge(id_translation[cur], call_entry)
+                        write_graph_edge(call_exit, id_translation[arg_exit])
+                    else:
+                        write_graph_edge(id_translation[cur], last_created[fid][0])
+                        write_graph_edge(last_created[fid][1], id_translation[arg_exit])
                 # the only way to the arg exit is through the function,
                 # so in either case we want to add it
                 work.append(arg_exit)
@@ -191,6 +202,21 @@ def save_maps():
         out_fd.write(str(i) + "," + name + "\n")
     out_fd.close()
 
+def get_all_toplevel_entrys(g):
+    starts = filter(lambda (n, d): 
+            d["type"] == "CFG_FUNC_ENTRY" and
+            d["name"].endswith(".php"),
+            g.nodes(data=True))
+
+    return map(lambda (n, d): n, starts)
+
+def get_squirrelmail_entries(g):
+    starts = filter(lambda (n, d): 
+            d["type"] == "CFG_FUNC_ENTRY" and
+            d["name"].endswith("read_body.php"),
+            g.nodes(data=True))
+
+    return map(lambda (n, d): n, starts)
 
 idc = 0
 # copied id -> orig id
@@ -199,6 +225,28 @@ graph_fd = open("tmp/graph.txt", "w+")
 g = None
 copied_funcs = 0
 unique_funcs = set()
+
+def debug():
+    global graph_fd, copied_funcs
+    global g
+
+    load_sinks()
+    load_sources()
+    load_def_use_info()
+
+    g = graph_from_json()
+    for n in get_all_toplevel_entrys(g):
+        write_copied_cfg(g, n, 0)
+    #write_copied_cfg(g, 3, 1)
+    print "Total funcs: " + str(copied_funcs)
+    print "Unique funcs: " + str(len(unique_funcs))
+    write_graph_node_def_use()
+    write_graph_sinks_and_sources()
+
+    save_maps()
+
+    graph_fd.close()
+
 def main():
     global graph_fd, copied_funcs
     global g
@@ -208,7 +256,8 @@ def main():
     load_def_use_info()
 
     g = graph_from_json()
-    write_copied_cfg(g, 31307)
+    for n in get_squirrelmail_entries(g):
+        write_copied_cfg(g, n, 20)
     print "Total funcs: " + str(copied_funcs)
     print "Unique funcs: " + str(len(unique_funcs))
     write_graph_node_def_use()
@@ -220,3 +269,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    #debug()
