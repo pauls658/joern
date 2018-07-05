@@ -32,8 +32,11 @@ import udg.useDefGraph.UseOrDef;
 
 import java.util.HashSet;
 import java.util.Stack;
+import java.util.ArrayList;
 
 import java.io.BufferedReader;
+import java.io.PrintWriter;
+import java.io.FileWriter;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
@@ -48,6 +51,11 @@ public class PHPASTDefUseAnalyzer extends ASTDefUseAnalyzer
 	private HashSet<String> nonDefingFunctions;
 	private Stack<Long> argListStack;
 
+	// The order in which function calls are executed for this basic block
+	private ArrayList<Long> callOrder;
+
+	private PrintWriter callOrderFile;
+
 	public PHPASTDefUseAnalyzer() {
 		this.nonDefingFunctions = new HashSet<String>();
 		try {
@@ -59,10 +67,19 @@ public class PHPASTDefUseAnalyzer extends ASTDefUseAnalyzer
 				nonDefingFunctions.add(line.trim());
 			}
 			fileReader.close();
+
+			this.callOrderFile = new PrintWriter(new FileWriter("call_order.csv", false));
+			this.callOrderFile.printf("id,prev_id,first_call,last_call\n");
 		} catch (IOException e) {
 			e.printStackTrace();
+			System.exit(1);
 		}
 		argListStack = new Stack<Long>();
+		callOrder = new ArrayList<Long>();
+	}
+
+	public void cleanup() {
+		this.callOrderFile.close();
 	}
 	/**
 	 * Analyze an AST as usual. In case analyzeAST(ASTProvider) was called
@@ -284,6 +301,41 @@ public class PHPASTDefUseAnalyzer extends ASTDefUseAnalyzer
 		}
 	}
 
+	// Initializes our state before analyzing a basic block
+	@Override
+	public void BBInit() {
+		// sanity check
+		assert argListStack.empty();
+
+		this.callOrder.clear();
+	}
+	
+	@Override
+	public void BBFinish() {
+		System.out.println(this.callOrder);
+		if (this.callOrder.size() > 0) {
+			Long firstCall = this.callOrder.get(0);
+			Long lastCall = this.callOrder.get(this.callOrder.size() - 1);
+
+			Long prev = -1l;
+			String firstBool, lastBool;
+			for (Long cur : this.callOrder) {
+				if (cur == firstCall)
+					firstBool = "true";
+				else
+					firstBool = "false";
+
+				if (cur == lastCall)
+					lastBool = "true";
+				else
+					lastBool = "false";
+
+				this.callOrderFile.printf("%d,%d,%s,%s\n", cur, prev, firstBool, lastBool); 
+				prev = cur;
+			}
+		}
+	}
+
 	public void setPredicate( boolean analyzingPredicate) {
 		this.analyzingPredicate = analyzingPredicate;
 	}
@@ -298,5 +350,9 @@ public class PHPASTDefUseAnalyzer extends ASTDefUseAnalyzer
 
 	public boolean analyzingArgList() {
 		return !argListStack.empty();
+	}
+
+	public void addToCallOrder(Long Id) {
+		this.callOrder.add(Id);
 	}
 }

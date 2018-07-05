@@ -44,8 +44,11 @@ class PHPCFGToUDGConverter extends CFGToUDGConverter {
                         .getASTNode();
                 ASTNodeASTProvider provider = new ASTNodeASTProvider();
                 provider.setNode(statementNode);
+				getASTDefUseAnalyzer().BBInit();
                 Collection<UseOrDef> usesAndDefs = getASTDefUseAnalyzer()
                         .analyzeAST(provider);
+				getASTDefUseAnalyzer().BBFinish();
+				// collect global variables (is this used anymore?)
 				String nodeType = statementNode.getProperty("type");
 				if (nodeType instanceof String && 
 					(nodeType.equals("AST_GLOBAL") || nodeType.equals("AST_PARAM")))

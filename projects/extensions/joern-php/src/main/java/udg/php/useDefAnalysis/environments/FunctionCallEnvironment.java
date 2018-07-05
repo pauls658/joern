@@ -6,6 +6,8 @@ import java.util.HashSet;
 
 import udg.ASTProvider;
 import udg.ASTNodeASTProvider;
+import udg.useDefAnalysis.ASTDefUseAnalyzer;
+import udg.php.useDefAnalysis.PHPASTDefUseAnalyzer;
 import ast.ASTNode;
 import udg.useDefAnalysis.environments.EmitDefAndUseEnvironment;
 import udg.useDefGraph.UseOrDef;
@@ -16,11 +18,13 @@ public class FunctionCallEnvironment extends EmitDefAndUseEnvironment
 	private HashSet<String> nonDefingFunctions;
 	private String name;
 	private String type;
+	private Long Id;
 
 	public FunctionCallEnvironment(HashSet<String> in, ASTProvider aProv) {
 		this.nonDefingFunctions = in;
 		ASTNodeASTProvider func = (ASTNodeASTProvider)aProv;
 		ASTNode a = func.getASTNode();
+		this.Id = a.getNodeId();
 		this.type = a.getProperty("type");
 		if (this.type.equals("AST_CALL")) {
 			a = a.getChild(0); // the name
@@ -89,4 +93,9 @@ public class FunctionCallEnvironment extends EmitDefAndUseEnvironment
 		return false;
 	}
 
+	@Override
+	public void postTraverse(ASTDefUseAnalyzer analyzer) {
+		PHPASTDefUseAnalyzer phpAnalyzer = (PHPASTDefUseAnalyzer)analyzer;
+		phpAnalyzer.addToCallOrder(this.Id);
+	}
 }

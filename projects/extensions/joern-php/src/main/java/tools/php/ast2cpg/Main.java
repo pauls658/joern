@@ -73,7 +73,8 @@ public class Main {
 
 		extractor.initialize(nodeFileReader, edgeFileReader);
 		ast2cfgConverter.setFactory(new PHPCFGFactory());
-		cfgToUDG.setASTDefUseAnalyzer(new PHPASTDefUseAnalyzer());
+		PHPASTDefUseAnalyzer analyzer = new PHPASTDefUseAnalyzer();
+		cfgToUDG.setASTDefUseAnalyzer(analyzer);
 
 		// initialize writers
 		MultiPairCSVWriterImpl csvWriter = new MultiPairCSVWriterImpl();
@@ -162,42 +163,15 @@ public class Main {
 				argdefuseFile.write((String.valueOf(entry.getKey()) + "," + symbols + "\n").getBytes());
 			}
 
-			/**
-			defBBs.addAll(udg.getGlobalDefs());
-			DefUseCFG defUseCFG = udgAndCfgToDefUseCFG.convert(cfg, udg); // nothing really useful done here, just an "easier format" for finding reaching defs
-			//PHPDDG ddg = (PHPDDG) ddgCreator.createForDefUseCFG(defUseCFG);
-			//csvDDGExporter.writeDDGEdges(ddg, udg.nameToParamNode);
-			*/
 		}
 
-		/**
-		FileOutputStream newPropsFile = new FileOutputStream("new_props.csv");
-		newPropsFile.write(("id,globalName\n").getBytes());
-		int count = 0, edgecount = 0;
-		//System.out.println("Number global nodes: " + numGlobalNodes +  ", Number BB defs: " + defBBs.size());
-		for (Tuple<String, ASTNode> def : defBBs) {
-			String globalName = def.x;
-			ASTNode BB = def.y;
-			newPropsFile.write((BB.getNodeId() + "," + globalName + "\n").getBytes());
-			//LinkedList<ASTNode> globalNodes = globalNameToBB.get(globalName);
-			//System.out.println("Processing " + globalName + "th node with " + globalNodes.size() + " global nodes");
-			count++;
-			String id2 = BB.getProperty("funcid");
-			for (ASTNode globalNode : globalNodes) {
-				String id1 = globalNode.getProperty("funcid");
-				if (id1 instanceof String && id2 instanceof String && !id1.equals(id2)) {
-					ddg.add(BB, globalNode, globalName);
-					edgecount++;
-				}
-			}
-		}
-		*/
 
 		// now that we wrapped up all functions, let's finish off with the call graph
 		CG cg = PHPCGFactory.newInstance();
 		csvCGExporter.writeCGEdges(cg);
 
 		csvWriter.closeEdgeFile();
+		analyzer.cleanup();
 	}
 
 	private static void parseCommandLine(String[] args)	{
