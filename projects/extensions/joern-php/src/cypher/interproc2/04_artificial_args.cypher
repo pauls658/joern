@@ -47,7 +47,7 @@ create
 match
 (call)<-[:CALL_ID]-(entry:ART_AST{type:"arg_entry",childnum:0})
 where
-call.type in ["AST_CALL", "AST_STATIC_CALL", "AST_NEW"]
+call.type in ["AST_CALL", "AST_STATIC_CALL", "AST_NEW", "AST_METHOD_CALL"] // TODO: remove AST_METHOD_CALL
 set
 entry.entry_arg = true;
 
