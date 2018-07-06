@@ -72,10 +72,32 @@ match
 create
 (prev_ret)-[:FLOWS_TO{new_edge:true}]->(entry_arg);
 
+
 // now do the ret_defs
-
+// Frist do the shallowest calls that return to the top-level basic block
 match
+p=(bb:BB)-[:PARENT_OF*0..]->(call:FUNCCALL)<-[:ASSOC]-(ret:ART_AST{type:"return"})
+where
+ID(bb) = call.bb_id and // make sure we don't match the parent in a nested blocks (e.g. a loop)
+ret.call_id = ID(call) and  // maybe not necessary
+single(n in nodes(p) where n:FUNCCALL)
 
-()-[r{delete:true}]-()
+create 
+(ret)-[:RET_DEF]->(bb);
 
-delete r;
+
+match 
+
+p=(top:FUNCCALL)-[:PARENT_OF]->(alist:AST{type:"AST_ARG_LIST"})-[:PARENT_OF]->(arg:AST)-[:PARENT_OF*0..]->(call:FUNCCALL),
+(call)<-[:ASSOC]-(ret:ART_AST{type: "return"}), // return of nested call
+(arg)<-[:ASSOC]-(assoc_arg:ART_AST{type: "arg_entry"}) // associated artificial arg of top call
+
+where 
+single(n in tail(nodes(p)) where n:FUNCCALL) // make sure we only deal with one level of nested call
+
+create 
+(ret)-[:RET_DEF]->(assoc_arg);
+
+
+// delete the deleted edges
+match ()-[r{delete:true}]-() delete r;
