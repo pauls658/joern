@@ -3,48 +3,44 @@
 /////////////////
 // normal case: have args
 match 
-
 (a:ART_AST{type:"arg_entry"})-[:CALL_ID]->(call:FUNCCALL)-[:CALLS]->(decl:FUNCDECL)-[:ENTRY]->(func_entry)
-
 where 
 not (a)-[:FLOWS_TO]->()
-
 create 
 (a)-[:INTERPROC{type:"entry"}]->(func_entry);
+
+
 
 // special case: no args
 match 
-
 (a:ART_AST{type:"dummy_arg"})-[:CALL_ID]->(call:FUNCCALL)-[:CALLS]->(decl:FUNCDECL)-[:ENTRY]->(func_entry)
-
 where 
 not (a)-[:FLOWS_TO]->()
-
 create 
 (a)-[:INTERPROC{type:"entry"}]->(func_entry);
+
+
 
 ///////////////
 // arg exits //
 ///////////////
 match 
-
 (a:ART_AST{type:"arg_exit"})-[:CALL_ID]->(call:FUNCCALL)-[:CALLS]->(decl:FUNCDECL)-[:EXIT]->(func_exit)
-
 where 
 not ()-[:FLOWS_TO]->(a)
-
 create 
 (a)<-[:INTERPROC{type:"exit"}]-(func_exit);
+
+
 
 match 
-
 (a:ART_AST{type:"return"})-[:ASSOC]->(call:FUNCCALL)-[:CALLS]->(decl:FUNCDECL)-[:EXIT]->(func_exit)
-
 where 
 not ()-[:FLOWS_TO]->(a)
-
 create 
 (a)<-[:INTERPROC{type:"exit"}]-(func_exit);
+
+
 
 
 ///////////////////////

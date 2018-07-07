@@ -6,11 +6,29 @@ decl.ret_def = toString(ID(decl)) + "_ret"
 set 
 ret.defs = toString(ID(decl)) + "_ret";
 
-// now add the ret defs
+
+// create a def for the actual return
 match
-(decl)<-[:CALLS]-(call)<-[:ASSOC]-(a:ART_AST{type:"return"})-[:RET_DEF]->(BB)
+(ret:ART_AST{type:"return"})
 set
-BB.uses = coalesce(BB.uses + ";" + decl.ret_def, decl.ret_def);
+ret.defs = coalesce(toString(ret.call_id) + "_actual_ret;" + ret.defs, ret.call_id + "_actual_ret")
+set
+ret.actual_ret_name = toString(ret.call_id) + "_actual_ret";
+
+
+// create a use for the actual return (poorly indicated by "RET_DEF")
+match
+(BB)<-[:RET_DEF]-(ret)
+set
+BB.uses = coalesce(BB.uses + ";" + ret.actual_ret_name, ret.actual_ret_name);
+
+
+// create a use for the formal ret
+match
+(decl)<-[:CALLS]-(call)<-[:ASSOC]-(ret:ART_AST{type:"return"})-[:RET_DEF]->(BB)
+set
+ret.uses = coalesce(decl.ret_def + ";" + ret.uses, decl.ret_def);
+
 
 // arif args
 match
@@ -22,6 +40,8 @@ aentry.childnum = param.childnum
 set aentry.defs = param.defs
 set aexit.uses = param.defs 
 set aexit.flags = coalesce(param.flags, ["PARAM_VAL"]);
+
+
 
 // remove AST global defs
 match
