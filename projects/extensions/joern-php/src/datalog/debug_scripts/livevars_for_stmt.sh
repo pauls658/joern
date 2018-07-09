@@ -1,7 +1,7 @@
 #!/bin/bash
 
 if [[ -z $1 ]]; then
-	echo "usage: ./$0 <stmt-id>"
+	echo "usage: ./$0 <stmt-id> [lsfjlk]"
 	exit 1
 fi
 

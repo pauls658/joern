@@ -14,22 +14,21 @@
 .decl path(start:number, end:number)
 .decl reachable(stmt:number)
 
-.input edge(IO=file, filename="out_edge.csv")
-.input def(IO=file, filename="out_def.csv")
-.input use(IO=file, filename="out_use.csv")
-.input source(IO=file, filename="out_source.csv")
-.input sink(IO=file, filename="out_sink.csv")
-.input safe_sink(IO=file, filename="out_safe_sink.csv")
-.input nokill(IO=file, filename="out_nokill.csv")
+.input edge(IO=file, filename="tmp/edge.csv")
+.input def(IO=file, filename="tmp/def.csv")
+.input use(IO=file, filename="tmp/use.csv")
+.input source(IO=file, filename="tmp/source.csv")
+.input sink(IO=file, filename="tmp/sink.csv")
+.input safe_sink(IO=file, filename="tmp/safe_sink.csv")
+.input nokill(IO=file, filename="tmp/nokill.csv")
 
-path(187038, end) :- edge(187038, end).
-path(187038, end) :- path(187038, mid), edge(mid, end).
-reachable(stmt) :- path(187038, stmt).
-reachable_safe_sink(stmt) :- path(187038, stmt), safe_sink(stmt).
+path({{id}}, end) :- edge({{id}}, end).
+path({{id}}, end) :- path({{id}}, mid), edge(mid, end).
+reachable(stmt) :- path({{id}}, stmt).
+reachable_safe_sink(stmt) :- path({{id}}, stmt), safe_sink(stmt).
 
 //
 //path(start, end) :- source(start), edge(start, end).
 //path(start, end) :- path(start, mid), edge(mid, end).
 //reachable(stmt) :- source(start), path(start, stmt).
 .output reachable
-.output reachable_safe_sink

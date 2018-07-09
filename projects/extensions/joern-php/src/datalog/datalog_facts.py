@@ -454,9 +454,10 @@ def main():
     preprocesses_graph(g)
     entry = sqmail_entries(g)[0][0]
     calc_func_depths(g, entry)
-    depth = 6
+    depth = 4
     print "write_bounded_copied_cfg to depth %d" % (depth)
     #write_bounded_copied_cfg(g, entry, depth)
+    print entry
     write_copied_cfg(g, entry, depth)
     write_datalog_node_def_use()
     write_datalog_sinks_and_sources()
