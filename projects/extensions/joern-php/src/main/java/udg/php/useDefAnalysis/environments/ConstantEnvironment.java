@@ -17,8 +17,8 @@ public class ConstantEnvironment extends UseDefEnvironment
 	{	
 		// A Constant has exactly one Identifier child whose StringExpression child contains
 		// the constant's name.
-		String code = astProvider.getChild(0).getChild(0).getEscapedCodeStr();
-		symbols.add(code);
+		//String code = astProvider.getChild(0).getChild(0).getEscapedCodeStr();
+		//symbols.add(code);
 		
 		return symbols;
 	}
@@ -32,12 +32,16 @@ public class ConstantEnvironment extends UseDefEnvironment
 	
 	public Collection<UseOrDef> useOrDefsFromSymbols(ASTProvider child)
 	{
+		return new LinkedList<UseOrDef>();
+/*
 		if( this.emitUse) {
 			LinkedList<UseOrDef> retval = createUsesForAllSymbols(upstreamSymbols());
 			return retval;
 		}
 		else
 			return super.useOrDefsFromSymbols(child);
+
+*/
 	}
 	
 	public void setEmitUse( boolean emitUse) {
