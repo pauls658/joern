@@ -19,12 +19,23 @@ def load_id_map():
 def load_var_map():
     fd = open("tmp/var_map.csv", "r")
     var_map = {}
+    rev_var_map = {}
     for line in fd:
         i, var_name = line.split(",")
         i = int(i)
-        var_map[i] = var_name
-    return var_map
+        var_map[i] = var_name.strip()
+        rev_var_map[var_name] = i
+    return var_map, rev_var_map
 
+def load_data_deps():
+    fd = open("datadep.csv", "r")
+    datadeps = []
+    for line in fd:
+        datadeps.append(tuple(map(int, line.split("\t"))))
+    return datadeps
+
+"""
+This is way too slow
 def load_livedefs(stmt):
     fd = open("livedef.csv", "r")
     stmt_livevars = defaultdict(set)
@@ -35,6 +46,7 @@ def load_livedefs(stmt):
         if stmt == this_stmt:
             ret.add(var_id)
     return ret
+"""
 
 def load_souffle_res():
     s = set()
@@ -58,6 +70,21 @@ def livevars_for_stmt(args):
     var_map = load_var_map()
     print load_livedefs(stmt)
 
+def datadeps_to_cypher():
+    datadeps = load_data_deps()
+    var_map, _ = load_var_map()
+    id_map, _ = load_id_map()
+
+    unique_datadeps = set()
+    for def_stmt, use_stmt, var_id in datadeps:
+        unique_datadeps.add((id_map[def_stmt], id_map[use_stmt], var_map[var_id]))
+
+    fd = open("cypher_datadeps.csv", "w+")
+    fd.write("def_stmt,use_stmt,var\n")
+    for def_stmt, use_stmt, var_id in unique_datadeps:
+        fd.write("%d,%d,%s\n" % (def_stmt, use_stmt, var_id))
+    fd.close()
+
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         cmd = "<none>"
@@ -65,7 +92,8 @@ if __name__ == "__main__":
         cmd = sys.argv[1]
     cmds = {
             "livevars" : livevars_for_stmt,
-            "echos" : unique_echos
+            "echos" : unique_echos,
+            "datadeps" : datadeps_to_cypher
     }
     if cmd not in cmds:
         print "Invalid command: %s" % (cmd)

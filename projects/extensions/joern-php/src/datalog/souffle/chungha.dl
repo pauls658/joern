@@ -6,6 +6,7 @@
 .decl tainted(stmt:number)
 .decl tainted_sink(stmt:number)
 .decl nokill(stmt:number)
+.decl datadep(def_stmt:number, use_stmt:number, var:number)
 
 .input edge(IO=file, filename="tmp/edge.csv")
 .input def(IO=file, filename="tmp/def.csv")
@@ -35,5 +36,8 @@ livedef(def_stmt, var, def_stmt) :- tainted(def_stmt), def(def_stmt, var).
 // get tainted sinks
 tainted_sink(this_stmt) :- sink(this_stmt), tainted(this_stmt).
 
-.output livedef
+// compute data dependences
+datadep(def_stmt, use_stmt, var) :- livedef(def_stmt, var, use_stmt), use(use_stmt, var).
+
 .output tainted_sink
+.output datadep
