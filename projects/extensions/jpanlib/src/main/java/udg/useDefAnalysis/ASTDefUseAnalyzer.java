@@ -55,19 +55,19 @@ public abstract class ASTDefUseAnalyzer
 
 		int numChildren = astProvider.getChildCount();
 
+		env.preTraverse(this);
 		environmentStack.push(env);
 		for (int i = 0; i < numChildren; i++)
 		{
 			ASTProvider childProvider = astProvider.getChild(i);
 			if( env.shouldTraverse(childProvider)) {
-				env.preTraverse(this);
 				traverseAST(childProvider);
-				env.postTraverse(this);
 			}
 
 			useDefsOfBlock.addAll(env.useOrDefsFromSymbols(childProvider));
 		}
 		environmentStack.pop();
+		env.postTraverse(this);
 
 		reportUpstream(env);
 	}
@@ -97,5 +97,15 @@ public abstract class ASTDefUseAnalyzer
 			// stack is empty, we've reached the root.
 			// Nothing to do.
 		}
+	}
+
+	// Executed just before we begin traversing a basic block
+	public void BBInit() {
+		return;
+	}
+
+	// Executed just after we finish traversing a basic block
+	public void BBFinish() {
+		return;
 	}
 }
