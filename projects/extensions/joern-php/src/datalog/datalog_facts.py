@@ -63,11 +63,11 @@ def load_def_use_info():
         row = row["row"] # id, defs, uses
         stmt_id = int(row[0])
         if row[1] is not None:
-            defs = row[1].split(";")
+            defs = filter(lambda x: x, row[1].split(";"))
             distinct_vars.update(defs)
             stmt_defs[stmt_id] = defs
         if row[2] is not None:
-            uses = row[2].split(";")
+            uses = filter(lambda x: x, row[2].split(";"))
             distinct_vars.update(uses)
             stmt_uses[stmt_id] = uses
 
@@ -454,7 +454,7 @@ def main():
     preprocesses_graph(g)
     entry = sqmail_entries(g)[0][0]
     calc_func_depths(g, entry)
-    depth = 4
+    depth = 6
     print "write_bounded_copied_cfg to depth %d" % (depth)
     #write_bounded_copied_cfg(g, entry, depth)
     print entry
