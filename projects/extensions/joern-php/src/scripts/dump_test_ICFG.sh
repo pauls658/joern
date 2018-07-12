@@ -3,7 +3,7 @@
 echo "match ()-[r]-() set r.id = ID(r);match (a) set a.id = ID(a);" | cypher-shell
 
 wget \
-	--post-data='{"statements":[{"statement": "match (a)-[:FLOWS_TO]-() return distinct a"}]}' \
+	--post-data='{"statements":[{"statement": "match (a)-[:FLOWS_TO|INTERPROC]-() return distinct a"}]}' \
 	--header="Accept: application/json; charset=UTF-8" \
 	--header="Content-Type: application/json" \
 	-O nodes.json -q \
@@ -64,5 +64,3 @@ wget \
 	--header="Content-Type: application/json" \
 	-O sinks.json -q \
 	http://localhost:7474/db/data/transaction/commit
-
-
