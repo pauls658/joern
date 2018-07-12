@@ -312,23 +312,22 @@ public class PHPASTDefUseAnalyzer extends ASTDefUseAnalyzer
 	
 	@Override
 	public void BBFinish() {
-		System.out.println(this.callOrder);
 		if (this.callOrder.size() > 0) {
 			Long firstCall = this.callOrder.get(0);
 			Long lastCall = this.callOrder.get(this.callOrder.size() - 1);
 
-			Long prev = -1l;
+			Long prev = firstCall;
 			String firstBool, lastBool;
 			for (Long cur : this.callOrder) {
 				if (cur == firstCall)
-					firstBool = "true";
+					firstBool = "TRUE";
 				else
-					firstBool = "false";
+					firstBool = "FALSE";
 
 				if (cur == lastCall)
-					lastBool = "true";
+					lastBool = "TRUE";
 				else
-					lastBool = "false";
+					lastBool = "FALSE";
 
 				this.callOrderFile.printf("%d,%d,%s,%s\n", cur, prev, firstBool, lastBool); 
 				prev = cur;
