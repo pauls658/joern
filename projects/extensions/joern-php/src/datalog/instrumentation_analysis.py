@@ -18,8 +18,7 @@ def load_graph():
 
     fd = open("tmp/handleable.csv", "r")
     for line in fd:
-        new, handleable = line.split(",")
-        new = int(new)
+        new, handleable = map(int, line.split(","))
         handleable = bool(handleable)
         g.nodes[new]["handleable"] = handleable
     fd.close()
@@ -73,15 +72,19 @@ def find_instrumentation_point(g, sink):
     while work:
         cur = work.pop()
         preds = filter(
-                lambda (s,e,d): d["label"] == "REACHES" and \
-                                s not in visited,
+                lambda (s,e,d): d["label"] == "REACHES",
                 g.in_edges([cur], data=True))
 
+        if not preds:
+            instr_points.append(cur) # we reached the sink
+            continue
+
+        preds = filter(lambda (s,e,d): s not in visited, preds)
         preds = map(lambda (s,e,d): s, preds)
         visited.update(preds)
 
         if not preds:
-            instr_points.append(cur) # we reached the sink
+            continue
         elif all([pred in pdoms and  
                  g.node[pred]["handleable"]
                  for pred in preds]):
@@ -95,10 +98,10 @@ def find_instrumentation_point(g, sink):
 
     return instr_points
        
-def test():
-    global rev_id_map
+def test(sink):
+    global rev_id_map, id_map
     g = load_graph()
-    return find_instrumentation_point(g, rev_id_map[180361][0])
+    return map(lambda x: id_map[x], find_instrumentation_point(g, rev_id_map[sink][0]))
 
 if __name__ == "__main__":
     main()
