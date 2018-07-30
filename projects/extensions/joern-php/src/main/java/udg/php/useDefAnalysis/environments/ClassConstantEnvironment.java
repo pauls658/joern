@@ -7,8 +7,8 @@ import ast.expressions.Identifier;
 import ast.expressions.Variable;
 import udg.ASTNodeASTProvider;
 import udg.ASTProvider;
-import udg.useDefAnalysis.environments.UseDefEnvironment;
-import udg.useDefGraph.UseOrDef;
+import udg.php.useDefAnalysis.Symbol;
+import udg.php.useDefGraph.UseOrDef;
 
 public class ClassConstantEnvironment extends UseDefEnvironment
 {
@@ -20,16 +20,16 @@ public class ClassConstantEnvironment extends UseDefEnvironment
 	// simply return the symbol corresponding to the class constant access,
 	// which we determined in addChildSymbols as good as we could
 	@Override
-	public LinkedList<String> upstreamSymbols()
+	public LinkedList<Symbol> upstreamSymbols()
 	{	
-		LinkedList<String> retval = new LinkedList<String>();
-		retval.add(this.className + "::" + this.constName);
+		LinkedList<Symbol> retval = new LinkedList<Symbol>();
+		retval.add(new Symbol(this.className + "::" + this.constName));
 		return retval;
 	}
 	
 	// use a string such as "ClassName::constName" if the class name or the variable
 	// containing the class name is known, or else just use "*::constName"
-	public void addChildSymbols(LinkedList<String> childSymbols, ASTProvider child)
+	public void addChildSymbols(LinkedList<Symbol> childSymbols, ASTProvider child)
 	{
 		int childNum = child.getChildNumber();
 

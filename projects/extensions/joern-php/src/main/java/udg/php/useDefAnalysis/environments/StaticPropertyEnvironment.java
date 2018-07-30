@@ -8,8 +8,8 @@ import ast.expressions.StringExpression;
 import ast.expressions.Variable;
 import udg.ASTNodeASTProvider;
 import udg.ASTProvider;
-import udg.useDefAnalysis.environments.UseDefEnvironment;
-import udg.useDefGraph.UseOrDef;
+import udg.php.useDefAnalysis.Symbol;
+import udg.php.useDefGraph.UseOrDef;
 
 public class StaticPropertyEnvironment extends UseDefEnvironment
 {
@@ -21,10 +21,10 @@ public class StaticPropertyEnvironment extends UseDefEnvironment
 	// simply return the symbol corresponding to the static property access,
 	// which we determined in addChildSymbols as good as we could
 	@Override
-	public LinkedList<String> upstreamSymbols()
+	public LinkedList<Symbol> upstreamSymbols()
 	{	
-		LinkedList<String> retval = new LinkedList<String>();
-		retval.add(this.className + "::" + this.propName);
+		LinkedList<Symbol> retval = new LinkedList<Symbol>();
+		retval.add(new Symbol(this.className + "::" + this.propName));
 		return retval;
 	}
 	
@@ -33,7 +33,7 @@ public class StaticPropertyEnvironment extends UseDefEnvironment
 	// "ClassName::*" if we cannot determine them. If we cannot determine
 	// either, give up and don't generate symbols (instead of generating, e.g.,
 	// "*::*").
-	public void addChildSymbols(LinkedList<String> childSymbols, ASTProvider child)
+	public void addChildSymbols(LinkedList<Symbol> childSymbols, ASTProvider child)
 	{
 		int childNum = child.getChildNumber();
 

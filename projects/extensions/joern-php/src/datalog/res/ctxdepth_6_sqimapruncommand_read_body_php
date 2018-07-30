@@ -1,0 +1,6 @@
+26320 - formatEnvheader_0_s, should be tainted, properly tainted
+28724 - attachmentsdisplay, $message is only tainted arg to formatAttachment (not the cause though) - caused by decodeHeader
+27476 - formatMenubar_0_s, $message is tainted, flows through statically unknown funccall
+28603 - messagebody
+168349 - error_box $string, only one call is tainted
+140991 - mime_fetch_body

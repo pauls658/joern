@@ -1,0 +1,12 @@
+15648 - decodeHeader with $body
+15623 - decodeHeader with $body
+141256 - decodeHeader with mime_print_lines $body
+16458 - mailprio tainted from showInputForm $values, everything put into an array thing
+15595 - showInputForm $values taints the var $identity, which is used as an array index in $idents, which taints $signature
+16237 - very likely decodeHeader causing taintedness
+15409 - uses showInputForm $subject
+15731 - uses showInputForm $body
+15700 - signature is tainted by same mechanism as 15595
+15160 - substr calls are tainted, all use vars taken out of showInputForm $values
+15572 - signature is tainted from same mechanism as 15595
+15677 - same as above

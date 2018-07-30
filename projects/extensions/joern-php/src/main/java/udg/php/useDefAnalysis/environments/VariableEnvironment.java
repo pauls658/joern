@@ -6,8 +6,8 @@ import java.util.LinkedList;
 import ast.expressions.StringExpression;
 import udg.ASTNodeASTProvider;
 import udg.ASTProvider;
-import udg.useDefAnalysis.environments.UseDefEnvironment;
-import udg.useDefGraph.UseOrDef;
+import udg.php.useDefAnalysis.Symbol;
+import udg.php.useDefGraph.UseOrDef;
 
 public class VariableEnvironment extends UseDefEnvironment
 {
@@ -15,15 +15,14 @@ public class VariableEnvironment extends UseDefEnvironment
 	
 	// pass the 'code' of the variable upstream (i.e., the variable's name)
 	@Override
-	public LinkedList<String> upstreamSymbols()
+	public LinkedList<Symbol> upstreamSymbols()
 	{	
 		// A Variable usually has exactly one StringExpression child whose code string contains
 		// the variable's name.
 		if( ((ASTNodeASTProvider)astProvider.getChild(0)).getASTNode() instanceof StringExpression) {
 			String code = astProvider.getChild(0).getEscapedCodeStr();
-			symbols.add(code);
-		}
-		else {
+			symbols.add(new Symbol(code));
+		} else {
 			// otherwise, it's an expression evaluating to a variable name; not much we can
 			// do statically :(
 		}

@@ -6,30 +6,24 @@ import java.util.HashSet;
 
 import udg.ASTProvider;
 import udg.ASTNodeASTProvider;
-import udg.useDefAnalysis.ASTDefUseAnalyzer;
 import udg.php.useDefAnalysis.PHPASTDefUseAnalyzer;
 import ast.ASTNode;
-import udg.useDefAnalysis.environments.EmitDefAndUseEnvironment;
-import udg.useDefGraph.UseOrDef;
+import udg.php.useDefAnalysis.Symbol;
+import udg.php.useDefGraph.UseOrDef;
 
 public class ArgumentListEnvironment extends EmitDefAndUseEnvironment  
 {
 
 	@Override
-	public void addChildSymbols(LinkedList<String> childSymbols,
+	public void addChildSymbols(LinkedList<Symbol> childSymbols,
 			ASTProvider child)
 	{
 		ASTNodeASTProvider c = (ASTNodeASTProvider)child;
-		String id = String.valueOf(c.getASTNode().getNodeId());
-		if (isDef(child)) {
-			for (String symbol : childSymbols) {
-				defSymbols.add("@dbr argsymbol " + id + " " + symbol);
-			}
-		}
-		if (isUse(child)) {
-			for (String symbol : childSymbols) {
-				useSymbols.add("@dbr argsymbol " + id + " " + symbol);
-			}
+		Long id = c.getASTNode().getNodeId();
+		for (Symbol symbol : childSymbols) {
+			symbol.isArg = true;
+			symbol.argId = id;
+			useSymbols.add(symbol);
 		}
 	}
 
@@ -38,16 +32,15 @@ public class ArgumentListEnvironment extends EmitDefAndUseEnvironment
 	{
 		LinkedList<UseOrDef> retval = new LinkedList<UseOrDef>();
 
-		retval.addAll(createDefsForAllSymbols(defSymbols));
 		retval.addAll(createUsesForAllSymbols(useSymbols));
 
 		return retval;
 	}
 
 	@Override
-	public LinkedList<String> upstreamSymbols()
+	public LinkedList<Symbol> upstreamSymbols()
 	{
-		return symbols;
+		return emptySymbolList; // TODO: Return empty symbol list since we always emit our symbols?
 	}
 
 	@Override
@@ -63,15 +56,13 @@ public class ArgumentListEnvironment extends EmitDefAndUseEnvironment
 	}
 
 	@Override
-	public void preTraverse(ASTDefUseAnalyzer analyzer) {
-		PHPASTDefUseAnalyzer phpAnalyzer = (PHPASTDefUseAnalyzer)analyzer;
-		phpAnalyzer.pushArgListId(getNodeId());
+	public void preTraverse(PHPASTDefUseAnalyzer analyzer) {
+		analyzer.pushArgListId(getNodeId());
 	}
 
 	@Override
-	public void postTraverse(ASTDefUseAnalyzer analyzer) {
-		PHPASTDefUseAnalyzer phpAnalyzer = (PHPASTDefUseAnalyzer)analyzer;
-		phpAnalyzer.popArgListId();
+	public void postTraverse(PHPASTDefUseAnalyzer analyzer) {
+		analyzer.popArgListId();
 	}
 
 }

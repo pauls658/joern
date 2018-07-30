@@ -1,4 +1,5 @@
 #!/bin/bash
 
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null && pwd )"
 GSHELL=/home/brandon/tinkerpop/gshell.sh
-$GSHELL -e `pwd`/src/groovy/labelhandleables.groovy
+$GSHELL -e $DIR/../groovy/labelhandleables.groovy

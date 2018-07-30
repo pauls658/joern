@@ -1,4 +1,4 @@
-import json
+import json, sys
 import networkx as nx
 
 def graph_from_json():
@@ -23,6 +23,22 @@ def graph_from_json():
         g.add_edge(int(row[0]), int(row[1]), **rel_props)
 
     return g
+
+# not really used
+# dumps out the handleable info for translated node ids and
+# avoids overwriting previous analysis results
+def load_id_map():
+    global id_map
+    fd = open("tmp/id_map.csv", "r")
+    for line in fd:
+        new, orig = map(int, line.split(","))
+        id_map[new] = orig
+
+def dump_handleable():
+    global g
+    g = graph_from_json()
+    load_id_map()
+    write_handleable_info()
 
 def only_FLOWSTO_edges(g, n):
     return g.out_degree(nbunch=n) > 0 and \
@@ -357,43 +373,55 @@ def save_maps():
         out_fd.write("%d,%s\n" % (i, name))
     out_fd.close()
 
-def sqmail_entries(g):
+def sqmail_entries(g, file_name):
     return filter(
             lambda (_, x): "name" in x and \
-                    x["name"].endswith("read_body.php") and \
+                    x["name"].endswith(file_name) and \
                     x["type"] == "CFG_FUNC_ENTRY",
             g.nodes(data=True))
 
 def get_all_toplevel_entrys(g):
     starts = filter(lambda (n, d): 
             d["type"] == "CFG_FUNC_ENTRY" and
-            d["name"].endswith(".php"),
+            d["name"].endswith("right_main.php"),
             g.nodes(data=True))
 
     return map(lambda (n, d): n, starts)
 
 def write_func_depths():
     global func_depth
-
+    fd = open("tmp/func_depths", "w+")
     g = graph_from_json()
     entry = sqmail_entries(g)[0][0]
     calc_func_depths(g, entry)
 
     for eid, depth in func_depth.iteritems():
-        print "%s (%d): %d" % (g.nodes[eid]["name"], eid, depth)
+        fd.write("%s (%d): %d\n" % (g.nodes[eid]["name"], eid, depth))
+    fd.close()
 
 idc = 0
 # copied id -> orig id
 id_map = {}
-datalog_fd = open("tmp/facts", "w+")
-datalog_edge_fd = open("tmp/edge.csv", "w+")
-datalog_def_fd = open("tmp/def.csv", "w+")
-datalog_use_fd = open("tmp/use.csv", "w+")
-datalog_source_fd = open("tmp/source.csv", "w+")
-datalog_sink_fd = open("tmp/sink.csv", "w+")
-datalog_safe_sink_fd = open("tmp/safe_sink.csv", "w+")
-datalog_tainted_sink_fd = open("tmp/tainted_sink.csv", "w+")
-datalog_nokill_fd = open("tmp/nokill.csv", "w+")
+def open_output_files():
+	global datalog_fd
+	global datalog_edge_fd
+	global datalog_def_fd
+	global datalog_use_fd
+	global datalog_source_fd
+	global datalog_sink_fd
+	global datalog_safe_sink_fd
+	global datalog_tainted_sink_fd
+	global datalog_nokill_fd
+
+	datalog_fd = open("tmp/facts", "w+")
+	datalog_edge_fd = open("tmp/edge.csv", "w+")
+	datalog_def_fd = open("tmp/def.csv", "w+")
+	datalog_use_fd = open("tmp/use.csv", "w+")
+	datalog_source_fd = open("tmp/source.csv", "w+")
+	datalog_sink_fd = open("tmp/sink.csv", "w+")
+	datalog_safe_sink_fd = open("tmp/safe_sink.csv", "w+")
+	datalog_tainted_sink_fd = open("tmp/tainted_sink.csv", "w+")
+	datalog_nokill_fd = open("tmp/nokill.csv", "w+")
 g = None
 copied_funcs = 0
 unique_funcs = set()
@@ -435,6 +463,14 @@ def debug():
 
     datalog_fd.close()
 
+def write_handleable_info():
+    global id_map,g
+    fd = open("tmp/handleable.csv", "w+")
+    
+    for new, orig in id_map.iteritems():
+        fd.write("%d,%d\n" % (new, g.nodes[orig]["handleable"]))
+    fd.close()
+
 # Dear elves,
 # I'm impressed with your ability to cause me days
 # of frustration with such small changes to my code.
@@ -443,31 +479,48 @@ def debug():
 # I eagerly await your response.
 # Sincerely,
 #   Brandon
-def main():
+def main(args):
     global datalog_fd, copied_funcs
     global g
-
+    file_name = args[0]
+    open_output_files()
     load_sinks()
     load_sources()
     load_def_use_info()
     g = graph_from_json()
     preprocesses_graph(g)
-    entry = sqmail_entries(g)[0][0]
+    entry = sqmail_entries(g, file_name)[0][0]
     calc_func_depths(g, entry)
     depth = 6
     print "write_bounded_copied_cfg to depth %d" % (depth)
-    #write_bounded_copied_cfg(g, entry, depth)
-    print entry
     write_copied_cfg(g, entry, depth)
+    with open("tmp/cfg_exit", "w+") as fd:
+        fd.write(str(g.nodes[entry]["exit_id"]))
     write_datalog_node_def_use()
     write_datalog_sinks_and_sources()
 
     save_maps()
+    write_handleable_info()
 
     datalog_fd.close()
 
 if __name__ == "__main__":
-    #write_func_depths()
-    main()
-    #debug()
-    #testcases()
+    if len(sys.argv) < 2:
+        cmd = "<none>"
+    else:
+        cmd = sys.argv[1]
+    cmds = {
+            "main" : main,
+            "func_depths" : write_func_depths,
+            "debug" : debug,
+            "handleable" : dump_handleable
+    }
+    if cmd not in cmds:
+        print "Invalid command: %s" % (cmd)
+        print "Valid commands:"
+        print cmds.keys()
+    else:
+        if len(sys.argv) == 2:
+            cmds[cmd]()
+        else:
+            cmds[cmd](sys.argv[2:])

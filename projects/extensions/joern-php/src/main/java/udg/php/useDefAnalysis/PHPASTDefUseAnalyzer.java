@@ -1,6 +1,6 @@
 package udg.php.useDefAnalysis;
 
-import java.util.Collection;
+import java.util.*;
 
 import ast.expressions.*;
 import udg.ASTProvider;
@@ -11,10 +11,9 @@ import udg.php.useDefAnalysis.environments.CatchEnvironment;
 import udg.php.useDefAnalysis.environments.ClassConstantEnvironment;
 import udg.php.useDefAnalysis.environments.ClosureVarEnvironment;
 import udg.php.useDefAnalysis.environments.ConstantEnvironment;
-import udg.useDefAnalysis.ASTDefUseAnalyzer;
-import udg.useDefAnalysis.environments.EmitDefEnvironment;
-import udg.useDefAnalysis.environments.EmitUseEnvironment;
-import udg.useDefAnalysis.environments.EmitDefAndUseEnvironment;
+import udg.php.useDefAnalysis.environments.EmitDefEnvironment;
+import udg.php.useDefAnalysis.environments.EmitUseEnvironment;
+import udg.php.useDefAnalysis.environments.EmitDefAndUseEnvironment;
 import udg.php.useDefAnalysis.environments.FieldDeclarationEnvironment;
 import udg.php.useDefAnalysis.environments.FunctionCallEnvironment;
 import udg.php.useDefAnalysis.environments.ArgumentListEnvironment;
@@ -26,13 +25,9 @@ import udg.php.useDefAnalysis.environments.StaticPropertyEnvironment;
 import udg.php.useDefAnalysis.environments.StaticVariableDeclarationEnvironment;
 import udg.php.useDefAnalysis.environments.SwitchEnvironment;
 import udg.php.useDefAnalysis.environments.BaseExpressionEnvironment;
-import udg.useDefAnalysis.environments.UseDefEnvironment;
+import udg.php.useDefAnalysis.environments.UseDefEnvironment;
 import udg.php.useDefAnalysis.environments.VariableEnvironment;
-import udg.useDefGraph.UseOrDef;
-
-import java.util.HashSet;
-import java.util.Stack;
-import java.util.ArrayList;
+import udg.php.useDefGraph.UseOrDef;
 
 import java.io.BufferedReader;
 import java.io.PrintWriter;
@@ -44,12 +39,17 @@ import java.io.IOException;
 /**
  * PHP-specific implementation of ASTDefUseAnalyzer.
  */
-public class PHPASTDefUseAnalyzer extends ASTDefUseAnalyzer
+public class PHPASTDefUseAnalyzer
 {
+	protected Stack<UseDefEnvironment> environmentStack = new Stack<UseDefEnvironment>();
+	protected HashSet<UseOrDef> useDefsOfBlock = new HashSet<UseOrDef>();
+
 	// Determines whether we want to analyze a predicate or a normal statement
 	private boolean analyzingPredicate = false;
 	private HashSet<String> nonDefingFunctions;
 	private Stack<Long> argListStack;
+	public int dimDepth;
+	public int maxDimDepth;
 
 	// The order in which function calls are executed for this basic block
 	private ArrayList<Long> callOrder;
@@ -81,12 +81,12 @@ public class PHPASTDefUseAnalyzer extends ASTDefUseAnalyzer
 	public void cleanup() {
 		this.callOrderFile.close();
 	}
+
 	/**
 	 * Analyze an AST as usual. In case analyzeAST(ASTProvider) was called
 	 * on a standalone variable/constant/property, assume we are analyzing
 	 * a predicate and set analyzingPredicate to true for this analysis.
 	 */
-	@Override
 	public Collection<UseOrDef> analyzeAST(ASTProvider astProvider)
 	{
 
@@ -99,16 +99,57 @@ public class PHPASTDefUseAnalyzer extends ASTDefUseAnalyzer
 			nodeType.equals(ArrayIndexing.class.getSimpleName()))
 			this.analyzingPredicate = true;
 
-		Collection<UseOrDef> retval = super.analyzeAST(astProvider);
+		environmentStack.clear();
+		useDefsOfBlock.clear();
+		traverseAST(astProvider);
 		this.analyzingPredicate = false;
 
-		return retval;
+		return useDefsOfBlock;
+	}
+
+	protected void traverseAST(ASTProvider astProvider)
+	{
+		UseDefEnvironment env = createUseDefEnvironment(astProvider);
+		env.setASTProvider(astProvider);
+
+		int numChildren = astProvider.getChildCount();
+
+		env.preTraverse(this);
+		environmentStack.push(env);
+		for (int i = 0; i < numChildren; i++)
+		{
+			ASTProvider childProvider = astProvider.getChild(i);
+			if( env.shouldTraverse(childProvider)) {
+				traverseAST(childProvider);
+			}
+
+			useDefsOfBlock.addAll(env.useOrDefsFromSymbols(childProvider));
+		}
+		environmentStack.pop();
+		env.postTraverse(this);
+
+		reportUpstream(env);
+	}
+
+	protected void reportUpstream(UseDefEnvironment env) {
+		LinkedList<Symbol> symbols = env.upstreamSymbols();
+		ASTProvider astProvider = env.getASTProvider();
+
+		try
+		{
+			UseDefEnvironment parentEnv = environmentStack.peek();
+			parentEnv.addChildSymbols(symbols, astProvider);
+		} catch (EmptyStackException ex)
+		{
+			// stack is empty, we've reached the root.
+			// Nothing to do.
+		}
+
 	}
 
 	/**
 	 * Creates a UseDefEnvironment for a given AST node.
 	 */
-	@Override
 	protected UseDefEnvironment createUseDefEnvironment(ASTProvider astProvider)
 	{
 		String nodeType = astProvider.getTypeAsString();
@@ -302,15 +343,18 @@ public class PHPASTDefUseAnalyzer extends ASTDefUseAnalyzer
 	}
 
 	// Initializes our state before analyzing a basic block
-	@Override
 	public void BBInit() {
 		// sanity check
 		assert argListStack.empty();
 
+		// for determining function call order
 		this.callOrder.clear();
+
+		// for determining array indexes
+		this.maxDimDepth = 0;
+		this.dimDepth = 0;
 	}
 	
-	@Override
 	public void BBFinish() {
 		if (this.callOrder.size() > 0) {
 			Long firstCall = this.callOrder.get(0);

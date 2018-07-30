@@ -12,3 +12,10 @@ fi
 cd src/cypher/interproc2/
 ./all.sh
 cd -
+
+service neo4j stop
+
+src/scripts/run_label_handleables.sh
+
+service neo4j start
+

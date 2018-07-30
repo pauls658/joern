@@ -4,15 +4,15 @@ import java.util.Collection;
 import java.util.LinkedList;
 
 import udg.ASTProvider;
-import udg.useDefAnalysis.environments.UseDefEnvironment;
-import udg.useDefGraph.UseOrDef;
+import udg.php.useDefAnalysis.Symbol;
+import udg.php.useDefGraph.UseOrDef;
 
 public class IncDecEnvironment extends UseDefEnvironment
 {
-	private Collection<String> defSymbols = new LinkedList<String>();
-	private Collection<String> useSymbols = new LinkedList<String>();
+	private Collection<Symbol> defSymbols = new LinkedList<Symbol>();
+	private Collection<Symbol> useSymbols = new LinkedList<Symbol>();
 	
-	public void addChildSymbols( LinkedList<String> childSymbols, ASTProvider child)
+	public void addChildSymbols( LinkedList<Symbol> childSymbols, ASTProvider child)
 	{
 		this.symbols.addAll( childSymbols);
 			

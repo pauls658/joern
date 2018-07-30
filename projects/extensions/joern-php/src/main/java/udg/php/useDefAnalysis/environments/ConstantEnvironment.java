@@ -4,8 +4,8 @@ import java.util.Collection;
 import java.util.LinkedList;
 
 import udg.ASTProvider;
-import udg.useDefAnalysis.environments.UseDefEnvironment;
-import udg.useDefGraph.UseOrDef;
+import udg.php.useDefAnalysis.Symbol;
+import udg.php.useDefGraph.UseOrDef;
 
 public class ConstantEnvironment extends UseDefEnvironment
 {
@@ -13,7 +13,7 @@ public class ConstantEnvironment extends UseDefEnvironment
 
 	// pass the 'code' of the constant upstream (i.e., the constant's name)
 	@Override
-	public LinkedList<String> upstreamSymbols()
+	public LinkedList<Symbol> upstreamSymbols()
 	{	
 		// A Constant has exactly one Identifier child whose StringExpression child contains
 		// the constant's name.

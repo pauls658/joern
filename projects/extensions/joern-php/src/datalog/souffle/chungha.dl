@@ -41,3 +41,5 @@ datadep(def_stmt, use_stmt, var) :- livedef(def_stmt, var, use_stmt), use(use_st
 
 .output tainted_sink
 .output datadep
+.output livedef
+

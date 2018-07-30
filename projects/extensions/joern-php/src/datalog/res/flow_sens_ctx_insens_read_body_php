@@ -1,0 +1,31 @@
+1011 (152754) - first echo in displayHtmlHeader, probably due to not copying html_tag()
+1015 (152786) - echo just after the above, probably due to not copying sqgetGlobalVar()
+1018 (152838) - fourth echo of same func, probably same reason as above
+1022 (152873) - end of function, either $title or $xtra must be tainted
+
+1051 (168024) - logout_error() function. possible because of _() function, color function isnt tainted
+1054 (168049) - same as above
+
+1482 (168349) - error_box(). possibly because html_tag()
+
+3394 (140991) - mime_fetch_body(). seems to be the sqimap_run_command actually
+
+6648 (153664) - displayPageHeader(). html_tag() line 153
+6657 (153721) - line 155, _()
+6665 (153740) - line 159, html_tag()
+
+6685 (152975) - makeInternalLink() at line 49
+
+6703 (153764) - displayPageHeader() line 161. html_tag()
+6712 (153819) - function makeComposeLink() line 164 returns taint
+6778 (153911) - html_tag() at line 179
+
+8227 (26320) - formatEnvheader_0_s is tainted. line 421
+8326 (27681) - formatToolbar_0_s is tainted. line 583
+8329 (27689) - download_and_unsafe_link is tainted. line 579
+
+8604 (28593) - read_body.php line 701
+8612 (28603) - line 702
+8973 (28685) - line 715
+8981 (28724) - line 720
+9022 (28808) - line 731

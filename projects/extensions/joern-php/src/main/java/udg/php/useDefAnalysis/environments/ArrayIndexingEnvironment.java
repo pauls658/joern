@@ -4,32 +4,79 @@ import java.util.Collection;
 import java.util.LinkedList;
 
 import udg.ASTProvider;
-import udg.useDefAnalysis.environments.UseDefEnvironment;
-import udg.useDefGraph.UseOrDef;
+import udg.php.useDefAnalysis.Symbol;
+import udg.php.useDefGraph.UseOrDef;
+
+import udg.php.useDefAnalysis.PHPASTDefUseAnalyzer;
 
 public class ArrayIndexingEnvironment extends UseDefEnvironment
 {
-	private Collection<String> useSymbols = new LinkedList<String>();
-	
+	private Collection<Symbol> useSymbols = new LinkedList<Symbol>();
+	PHPASTDefUseAnalyzer phpAnalyzer;
+	private int ourDepth;
+	private Symbol arraySymbol;
+
 	private boolean emitUse = false;
 	
 	// pass the 'code' of the array upstream (i.e., the array's name)
 	// by recursion, this is already contained in the symbols field
 	@Override
-	public LinkedList<String> upstreamSymbols()
+	public LinkedList<Symbol> upstreamSymbols()
 	{	
 		return symbols;
 	}
+
+	private boolean isBottomDim() {
+		return this.phpAnalyzer.maxDimDepth == this.ourDepth;
+	}
 	
-	public void addChildSymbols( LinkedList<String> childSymbols, ASTProvider child)
+	public void addChildSymbols( LinkedList<Symbol> childSymbols, ASTProvider child)
 	{
-		// add the index element(s) to the useSymbols 
-		if( isUse( child))
-			useSymbols.addAll( childSymbols);
-		
-		// the name of the array is a symbol to be passed upstream
-		else
-			symbols.addAll(childSymbols);
+		if (this.isBottomDim()) {
+			// this is the bottom most array dimension,
+			// need to add extra info to the array name
+			if (child.getChildNumber() == 0) {
+				assert childSymbols.size() == 1;
+				// Save the array symbol til we know more about the index
+				this.arraySymbol = childSymbols.get(0);
+				this.arraySymbol.isArray = true;
+				// need the dimension before we can add it to the symbols
+			} else {
+				if (child.getTypeAsString().equals("StringExpression")) {
+					// Great! constant array index
+					this.arraySymbol.index = child.getEscapedCodeStr();
+					this.arraySymbol.isIndexVar = false;
+				} else if (child.getTypeAsString().equals("Variable")) {
+					// ok... variable index... maybe we can resolve it later
+					assert childSymbols.size() == 1;
+					this.arraySymbol.index = childSymbols.get(0).name;
+					this.arraySymbol.isIndexVar = true;
+				} else {
+					// Bollocks! unknown access
+					this.arraySymbol.index = null;
+				}
+				// We got the array name in the last step
+				// At this point, we are ready to report symbols
+				// The array name will always go into the upstream symbols.
+				// If we have something in the array index, then the symbol
+				// will be reported with the array name. Otherwise, report
+				// the use symbols.
+				if (this.arraySymbol.index == null) {
+					// we did not resolve the index, so we pass these
+					// up as uses
+					this.useSymbols.addAll(childSymbols);
+				}
+				// Regardless, always indicate this is any array symbol
+				this.symbols.add(this.arraySymbol);
+			}
+		} else {
+			// not the bottom-most. We only handle the first dimension
+			if( isUse( child)) { // index elements
+				useSymbols.addAll( childSymbols);
+			} else { // the name
+				symbols.addAll(childSymbols);
+			}
+		}
 	}
 
 	public Collection<UseOrDef> useOrDefsFromSymbols(ASTProvider child)
@@ -51,10 +98,28 @@ public class ArrayIndexingEnvironment extends UseDefEnvironment
 	public boolean isUse( ASTProvider child)
 	{
 		int childNum = child.getChildNumber();
-		return 1 == childNum ? true : false;
+		return 1 == childNum;
 	}
 	
 	public void setEmitUse( boolean emitUse) {
 		this.emitUse = emitUse;
+	}
+
+	@Override
+	public void preTraverse(PHPASTDefUseAnalyzer analyzer) {
+		this.phpAnalyzer = (PHPASTDefUseAnalyzer)analyzer;
+		this.phpAnalyzer.dimDepth++;
+		this.ourDepth = phpAnalyzer.dimDepth;
+		this.phpAnalyzer.maxDimDepth++;
+	}
+
+	@Override
+	public void postTraverse(PHPASTDefUseAnalyzer analyzer) {
+		this.phpAnalyzer.dimDepth--;
+		assert this.phpAnalyzer.dimDepth >= 0;
+		if (this.phpAnalyzer.dimDepth == 0) {
+			// We reached the top level array dimension
+			this.phpAnalyzer.maxDimDepth = 0;
+		}
 	}
 }

@@ -4,8 +4,8 @@ import java.util.Collection;
 import java.util.LinkedList;
 
 import udg.ASTProvider;
-import udg.useDefAnalysis.environments.UseDefEnvironment;
-import udg.useDefGraph.UseOrDef;
+import udg.php.useDefAnalysis.Symbol;
+import udg.php.useDefGraph.UseOrDef;
 
 public class PropertyEnvironment extends UseDefEnvironment
 {
@@ -13,13 +13,13 @@ public class PropertyEnvironment extends UseDefEnvironment
 
 	// simply return the list of symbols added earlier by addChildSymbols
 	@Override
-	public LinkedList<String> upstreamSymbols()
+	public LinkedList<Symbol> upstreamSymbols()
 	{	
 		return this.symbols;
 	}
 	
 	// add the *object's name* of the property access expression to the child symbols
-	public void addChildSymbols(LinkedList<String> childSymbols, ASTProvider child)
+	public void addChildSymbols(LinkedList<Symbol> childSymbols, ASTProvider child)
 	{
 		int childNum = child.getChildNumber();
 		// Only add the left child but never the right child

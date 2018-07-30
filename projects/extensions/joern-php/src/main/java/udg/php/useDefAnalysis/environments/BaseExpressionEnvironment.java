@@ -1,12 +1,11 @@
 package udg.php.useDefAnalysis.environments;
 
 import udg.ASTProvider;
-import udg.useDefAnalysis.environments.EmitUseEnvironment;
-import udg.useDefGraph.UseOrDef;
+import udg.php.useDefAnalysis.Symbol;
+import udg.php.useDefGraph.UseOrDef;
 import java.util.Collection;
 import java.util.LinkedList;
 
-import udg.useDefAnalysis.ASTDefUseAnalyzer;
 import udg.php.useDefAnalysis.PHPASTDefUseAnalyzer;
 
 public class BaseExpressionEnvironment extends EmitUseEnvironment
@@ -14,7 +13,7 @@ public class BaseExpressionEnvironment extends EmitUseEnvironment
 	private boolean analyzingArgList;
 
 	@Override
-	public LinkedList<String> upstreamSymbols()
+	public LinkedList<Symbol> upstreamSymbols()
 	{
 		if (analyzingArgList) {
 			symbols.addAll(useSymbols);
@@ -34,8 +33,7 @@ public class BaseExpressionEnvironment extends EmitUseEnvironment
 	}
 
 	@Override
-	public void preTraverse(ASTDefUseAnalyzer analyzer) {
-		PHPASTDefUseAnalyzer phpAnalyzer = (PHPASTDefUseAnalyzer)analyzer;
+	public void preTraverse(PHPASTDefUseAnalyzer phpAnalyzer) {
 		this.analyzingArgList = phpAnalyzer.analyzingArgList();
 	}
 }

@@ -1,0 +1,12 @@
+153721 - displayPageHeader shortBoxName because imap_utf7_decode_local wasn't copied, handled ok
+159592 - sqimap_get_small_header_list error message - legit
+168349 - error_box string
+177264 - 1st switch case - legit - can be handled well
+177314 - 2nd switch case - legit
+177432 - 3rd switch case - legit -  handled well
+177623 - 4th switch case - legit - bad instrumentation performance, see if we can fix
+177837 - 6th switch case - legit - can be handled well
+178929 - sm_encode_html_special_chars in showMessagesForMailbox, because start_msg is tainted - maybe check why start_msg is tianted
+179895 - mail_message_listing_beginning - paginator and msg_cnt_str
+180361 - mail_message_listing_end- paginator and msg_cnt_str
+182884 - mailbox list - legit

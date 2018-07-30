@@ -2,63 +2,74 @@ package tools.php.ast2cpg;
 
 import udg.useDefGraph.UseDefGraph;
 import ast.ASTNode;
-import udg.useDefGraph.UseOrDef;
+import udg.php.useDefGraph.UseOrDef;
 
-import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.Collection;
-import java.util.Iterator;
+import java.util.*;
 
 class PHPUseDefGraph extends UseDefGraph {
-	/* maps literal global name to its AST_GLOBAL node. IDK why this is a linked list... */
-	HashMap<String, LinkedList<ASTNode>> globalNameToBB = new HashMap<String, LinkedList<ASTNode>>();
 
-	HashMap<String, LinkedList<ASTNode>> globalNameToDefBB = new HashMap<String, LinkedList<ASTNode>>();
-	LinkedList<Tuple<String, ASTNode>> globalDefs;
-	public HashMap<String, ASTNode> nameToParamNode = new HashMap<String, ASTNode>();
+	private HashSet<String> funcGlobals = new HashSet<String>();
+	// Params that are pass by ref (not-killable)
+	private HashSet<String> paramRefs = new HashSet<String>();
+	// Params that are pass by val (killable)
+	private HashSet<String> paramVals = new HashSet<String>();
+	// Variables local to this function
+    private HashSet<String> localSymbols = new HashSet<>();
+	// A list of all defs and uses for a specific block
+	// Key is the blocks ID
+	private HashMap<Long, LinkedList<UseOrDef>> useDefsForBlock = new HashMap<>();
 
-	public void addNameBBMapping(String globalName, ASTNode BB) {
-		LinkedList<ASTNode> BBs = globalNameToBB.get(globalName);
-		if (BBs == null) {
-			BBs = new LinkedList<ASTNode>();
-			globalNameToBB.put(globalName, BBs);
+	private void addUoDForId(Long id, UseOrDef uod) {
+		LinkedList<UseOrDef> val = useDefsForBlock.get(id);
+		if (val == null) {
+			val = new LinkedList<UseOrDef>();
+			useDefsForBlock.put(id, val);
 		}
-		BBs.add(BB);
+		val.add(uod);
 	}
 
-	public void addDefBBMapping(Collection<UseOrDef> symbols, ASTNode BB) {
-		Iterator<UseOrDef> it = symbols.iterator();
-		while (it.hasNext()) {
-			UseOrDef cur = it.next();
-			if (cur.isDef) {
-				LinkedList<ASTNode> BBs = globalNameToDefBB.get(cur.symbol);
-				if (BBs == null) {
-					BBs = new LinkedList<ASTNode>();
-					globalNameToDefBB.put(cur.symbol, BBs);
-				}
-				BBs.add(BB);
+	public void addUseDefsForBlock(ASTNode statementNode, Collection<UseOrDef> uods) {
+		for (UseOrDef uod : uods) {
+			if (uod.symbol.isArg) {
+				addUoDForId(uod.symbol.argId, uod);
+			} else {
+				addUoDForId(statementNode.getNodeId(), uod);
 			}
-		}		
+		}
 	}
 
-	public HashMap<String, LinkedList<ASTNode>> getMap() {
-		return globalNameToBB;
+	public HashMap<Long, LinkedList<UseOrDef>> getDefUseMap() {
+		return useDefsForBlock;
 	}
 
-	public HashMap<String, LinkedList<ASTNode>> getDefMap() {
-		return globalNameToDefBB;
+	public HashMap<Long, LinkedList<UseOrDef>> getUseDefsForBlock() { return useDefsForBlock; }
+
+	public void addFuncGlobal(String g) {
+		this.funcGlobals.add(g);
 	}
 
-	public void setGlobalDefs(LinkedList<Tuple<String, ASTNode>> globalDefs) {
-		this.globalDefs = globalDefs;
+	public void addParam(String p, ASTNode n) {
+		String flags = n.getProperty("flags");
+		if (flags instanceof String && flags.contains("PARAM_REF"))
+			this.paramRefs.add(p);
+		else
+		    this.paramVals.add(p);
 	}
 
-	public LinkedList<Tuple<String, ASTNode>> getGlobalDefs() {
-		return this.globalDefs;
+	public void addLocalSymbol(String s) {
+		localSymbols.add(s);
 	}
 
-	public void addParamASTNode(String identifier, ASTNode param) {
-		nameToParamNode.put(identifier, param);
+	public HashSet<String> getLocalSymbols() {
+		return localSymbols;
+	}
+
+	public boolean isParamRef(String p) {
+		return paramRefs.contains(p);
+	}
+
+	public boolean isGlobalSymbol(String symbol) {
+		return funcGlobals.contains(symbol);
 	}
 
 }

@@ -19,6 +19,6 @@ for cmd_file in $( ls *.cypher ); do
 	echo "$res" | grep -E "[0-9]"  > `dirname $0`/prev.csv
 done
 
-cat manual/60_get_func_globals.cypher | cypher-shell > `dirname $0`/prev.csv
-cat manual/61_set_killable_locals.cypher | cypher-shell
+#cat manual/60_get_func_globals.cypher | cypher-shell | tr -d '" ' > `dirname $0`/prev.csv
+#cat manual/61_set_killable_locals.cypher | cypher-shell
 

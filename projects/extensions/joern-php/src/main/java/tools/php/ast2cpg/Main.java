@@ -3,6 +3,7 @@ package tools.php.ast2cpg;
 import java.io.FileReader;
 import java.io.IOException;
 
+import cfg.nodes.AbstractCFGNode;
 import org.apache.commons.cli.ParseException;
 
 import ast.php.functionDef.FunctionDef;
@@ -26,16 +27,20 @@ import outputModules.csv.exporters.CSVCGExporter;
 import outputModules.csv.exporters.PHPCSVDDGExporter;
 //import udg.CFGToUDGConverter;
 import udg.php.useDefAnalysis.PHPASTDefUseAnalyzer;
+import udg.php.useDefGraph.UseOrDef;
 import udg.useDefGraph.UseOrDefRecord;
-//import udg.useDefGraph.UseDefGraph;
+//import udg.useDefGraph.useDefGraph;
 
 import ast.ASTNode;
 
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+
+import java.util.stream.Collectors;
 
 import java.io.*;
 public class Main {
@@ -74,7 +79,7 @@ public class Main {
 		extractor.initialize(nodeFileReader, edgeFileReader);
 		ast2cfgConverter.setFactory(new PHPCFGFactory());
 		PHPASTDefUseAnalyzer analyzer = new PHPASTDefUseAnalyzer();
-		cfgToUDG.setASTDefUseAnalyzer(analyzer);
+		cfgToUDG.setPHPASTDefUseAnalyzer(analyzer);
 
 		// initialize writers
 		MultiPairCSVWriterImpl csvWriter = new MultiPairCSVWriterImpl();
@@ -85,18 +90,15 @@ public class Main {
 		HashMap<Long, Tuple<HashSet<String>, HashSet<String>>> defUsesForBB = new HashMap<Long,Tuple<HashSet<String>, HashSet<String>>>();
 		// args always def + use their params
 		HashMap<Long, HashSet<String>> defUsesForArg = new HashMap<Long, HashSet<String>>();
-		//HashMap<Long, HashSet<String>> usesForBB = new HashMap<Long, HashSet<String>>();
-		//HashMap<Long, HashSet<String>> globalsForFuncId = new HashMap<Long, LinkedList<String>>();
-		//LinkedList<Tuple<String, ASTNode>> defBBs = new LinkedList<Tuple<String, ASTNode>>();
 		int numGlobalNodes = 0;
 		// let's go...
 		
-		FileOutputStream funcGlobalsFile = new FileOutputStream("func_id_globals.csv");
-		funcGlobalsFile.write(("id,globals\n").getBytes());
-		FileOutputStream BBdefuseFile = new FileOutputStream("BB_def_uses.csv");
-		BBdefuseFile.write(("id,defs,uses\n").getBytes());
-		FileOutputStream argdefuseFile = new FileOutputStream("arg_def_uses.csv");
-		argdefuseFile.write(("id,symbols\n").getBytes());
+		FileOutputStream BBdefFile = new FileOutputStream("defuse_csv/BB_def.csv");
+		BBdefFile.write(("id,symbol\n").getBytes());
+		FileOutputStream BBuseFile = new FileOutputStream("defuse_csv/BB_use.csv");
+		BBuseFile.write(("id,symbol\n").getBytes());
+		FileOutputStream argdefuseFile = new FileOutputStream("defuse_csv/arg_symbols.csv");
+		argdefuseFile.write(("id,symbol\n").getBytes());
 
 		FunctionDef rootnode;
 		while ((rootnode = (FunctionDef)extractor.getNextFunction()) != null) {
@@ -108,59 +110,36 @@ public class Main {
 			csvCFGExporter.writeCFGEdges(cfg);
 
 			PHPUseDefGraph udg = cfgToUDG.convert(cfg);
-			String globals = String.join(";", udg.getMap().keySet());
-			funcGlobalsFile.write((String.valueOf(rootnode.getNodeId()) + "," +
-						globals + "\n").getBytes());
 
-			defUsesForBB.clear();
-			defUsesForArg.clear();
-			for (Map.Entry<String, List<UseOrDefRecord>> entry : udg.getUseDefDict().entrySet()) {
-				if (entry.getKey().startsWith("@dbr")) {
-					String[] pieces = entry.getKey().split(" ");
-					switch (pieces[1]) {
-						case "argsymbol":
-							Long id = Long.parseLong(pieces[2]);
-							HashSet<String> it = defUsesForArg.get(id);
-							if (it == null) {
-								it = new HashSet<String>();
-								defUsesForArg.put(id, it);
-							}
-							it.add(pieces[3]);
-							break;
-						default:
-							throw new Exception("oh dang");
-					}
-					continue;
+			if (!rootnode.getTypeAsString().equals("TopLevelFunctionDef")) {
+				String funcid = Long.toString(rootnode.getNodeId());
+				String prefix = funcid + "_local";
+				cfgToUDG.makeSymbolsGlobal(udg, prefix);
+				String exitId = Long.toString(((AbstractCFGNode)cfg.getExitNode()).getNodeId());
+				for (String s : udg.getLocalSymbols()) {
+					BBdefFile.write((exitId + "," + s + "\n").getBytes());
 				}
+			}
 
-
-				for (UseOrDefRecord udr : entry.getValue()) {
-					Long nodeId = udr.getAstNode().getNodeId();
- 					Tuple<HashSet<String>, HashSet<String>> it;
-					it = defUsesForBB.get(nodeId);
-					if (it == null) {
-						it = new Tuple<HashSet<String>,HashSet<String>>(new HashSet<String>(), new HashSet<String>());
-						defUsesForBB.put(nodeId, it);
-					}
-					HashSet<String> s;
-					if (udr.isDef()) {
-						s = it.x;
+			FileOutputStream outFile;
+			for (Map.Entry<Long, LinkedList<UseOrDef>> e : udg.getDefUseMap().entrySet()) {
+			    // The id is for args is already updated
+				for (UseOrDef uod : e.getValue()) {
+					if (uod.symbol.isArg) {
+						outFile = argdefuseFile;
+					} else if (uod.isDef) {
+						outFile = BBdefFile;
 					} else {
-						s = it.y;
+						outFile = BBuseFile;
 					}
-					s.add(entry.getKey());
+
+					// name is always output
+					outFile.write((Long.toString(e.getKey()) + "," + uod.symbol.name + "\n").getBytes());
+					if (uod.symbol.isArray && uod.symbol.isIndexVar) {
+						// For now just output the index as a use
+						BBuseFile.write((Long.toString(e.getKey()) + "," + uod.symbol.index + "\n").getBytes());
+					}
 				}
-			}
-
-			for (Map.Entry<Long, Tuple<HashSet<String>, HashSet<String>>> entry : defUsesForBB.entrySet()) {
-				String defs = String.join(";", entry.getValue().x);
-				String uses = String.join(";", entry.getValue().y);
-				BBdefuseFile.write((String.valueOf(entry.getKey()) + "," + defs + "," + uses + "\n").getBytes());
-			}
-
-			for (Map.Entry<Long, HashSet<String>> entry : defUsesForArg.entrySet()) {
-				String symbols = String.join(";", entry.getValue());
-				argdefuseFile.write((String.valueOf(entry.getKey()) + "," + symbols + "\n").getBytes());
 			}
 
 		}
@@ -172,6 +151,9 @@ public class Main {
 
 		csvWriter.closeEdgeFile();
 		analyzer.cleanup();
+		BBuseFile.close();
+		BBdefFile.close();
+		argdefuseFile.close();
 	}
 
 	private static void parseCommandLine(String[] args)	{

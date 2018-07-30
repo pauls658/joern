@@ -7,7 +7,7 @@ class G {
 		"json_encode"
 	];
     
-    def nonMethodCall(Neo4jVertex v) {
+    def functionCall(Neo4jVertex v) {
     	if (g.V(v.id()).out('CALLS').toList().size() != 0) {
     		return true;
     	} else {
@@ -32,11 +32,9 @@ class G {
     	switch (v.value('type')) {
 			case "return":
 				return true;
-			//TODO: art ast cases:
-			//	have imp -> true
-			// 	no imp -> check whitelist
 			default:
-				return false;
+				def c = g.V(v.id()).out("CALL_ID").next();
+				return functionCall(c);
 		}
 	}
 
@@ -45,7 +43,8 @@ class G {
     		case "AST_CALL":
     		case "AST_STATIC_CALL":
     		case "AST_NEW":
-    			return nonMethodCall(v);
+			case "AST_METHOD_CALL":
+    			return functionCall(v);
     
     		case "AST_BINARY_OP":
     			return binaryOp(v);
@@ -62,7 +61,7 @@ class G {
     		case "AST_DO_WHILE":
     		//case "AST_GLOBAL": we can't be sure about type of global yet
     		case "AST_VAR":
-    		//case "AST_RETURN": no interproc right now
+    		case "AST_RETURN": 
     		case "AST_PARAM":
     		case "AST_PROP":
     		case "AST_PROP_DECL":
@@ -106,8 +105,6 @@ class G {
 
 	}
 
-	public canHandleCache = [:];
- 
     def canHandle(BB) {
 		if (BB.value("type") in stopTypes)
 			return false;
@@ -120,12 +117,10 @@ class G {
 			for (v in path) {
 				if (!canHandleAST(v)) {
 					//println "Could not handle type: " + v.value("type")
-					canHandleCache[BB.id()] = false;
 					return false;
 				}
 			}
 		}
-		canHandleCache[BB.id()] = true;
 		return true;
     }
 
@@ -134,8 +129,8 @@ class G {
 		g.V().\
 		where(
 			or(
-				or(__.in('REACHES'), __.in('INTERPROC')),
-				or(out('REACHES'), out('INTERPROC'))
+				or(__.in('FLOWS_TO'), __.in('INTERPROC')),
+				or(out('FLOWS_TO'), out('INTERPROC'))
 			)\
 		).toList();
 		for (bb in bbs) {
@@ -150,6 +145,8 @@ class G {
 }
 
 o = new G()
-o.labelHandleable()
-o.g.graph.tx().commit()
-o.g.graph.close()
+if (args.size() == 0) {
+	o.labelHandleable()
+	o.g.graph.tx().commit()
+	o.g.graph.close()
+}

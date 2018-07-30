@@ -4,12 +4,12 @@ import java.util.Collection;
 import java.util.LinkedList;
 
 import udg.ASTProvider;
-import udg.useDefAnalysis.environments.UseDefEnvironment;
-import udg.useDefGraph.UseOrDef;
+import udg.php.useDefAnalysis.Symbol;
+import udg.php.useDefGraph.UseOrDef;
 
 public class FunctionDefEnvironment extends UseDefEnvironment
 {
-	public void addChildSymbols(LinkedList<String> childSymbols,
+	public void addChildSymbols(LinkedList<Symbol> childSymbols,
 			ASTProvider child)
 	{
 		// the first and second children contain the parameters, respectively

@@ -18,6 +18,8 @@ sleep 3
 
 cd src/scripts/interproc2
 ./runit.sh
+mkdir ~/php_apps/rewritten/extra_stuff/$1
+mv killable_local_vars.csv ~/php_apps/rewritten/extra_stuff/$1/
 cd -
 
 cd src/AST_dumper

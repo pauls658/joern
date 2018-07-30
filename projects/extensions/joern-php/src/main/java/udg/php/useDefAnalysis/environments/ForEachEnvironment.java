@@ -1,7 +1,6 @@
 package udg.php.useDefAnalysis.environments;
 
 import udg.ASTProvider;
-import udg.useDefAnalysis.environments.EmitDefAndUseEnvironment;
 
 public class ForEachEnvironment extends EmitDefAndUseEnvironment
 {

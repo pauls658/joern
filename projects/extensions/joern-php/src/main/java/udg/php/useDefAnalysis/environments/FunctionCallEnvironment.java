@@ -6,11 +6,10 @@ import java.util.HashSet;
 
 import udg.ASTProvider;
 import udg.ASTNodeASTProvider;
-import udg.useDefAnalysis.ASTDefUseAnalyzer;
 import udg.php.useDefAnalysis.PHPASTDefUseAnalyzer;
 import ast.ASTNode;
-import udg.useDefAnalysis.environments.EmitDefAndUseEnvironment;
-import udg.useDefGraph.UseOrDef;
+import udg.php.useDefAnalysis.Symbol;
+import udg.php.useDefGraph.UseOrDef;
 
 public class FunctionCallEnvironment extends EmitDefAndUseEnvironment  
 {
@@ -39,7 +38,7 @@ public class FunctionCallEnvironment extends EmitDefAndUseEnvironment
 	}
 
 	@Override
-	public void addChildSymbols(LinkedList<String> childSymbols,
+	public void addChildSymbols(LinkedList<Symbol> childSymbols,
 			ASTProvider child)
 	{
 		if (isDef(child))
@@ -60,7 +59,7 @@ public class FunctionCallEnvironment extends EmitDefAndUseEnvironment
 	}
 
 	@Override
-	public LinkedList<String> upstreamSymbols()
+	public LinkedList<Symbol> upstreamSymbols()
 	{
 		return symbols;
 	}
@@ -94,8 +93,7 @@ public class FunctionCallEnvironment extends EmitDefAndUseEnvironment
 	}
 
 	@Override
-	public void postTraverse(ASTDefUseAnalyzer analyzer) {
-		PHPASTDefUseAnalyzer phpAnalyzer = (PHPASTDefUseAnalyzer)analyzer;
+	public void postTraverse(PHPASTDefUseAnalyzer phpAnalyzer) {
 		phpAnalyzer.addToCallOrder(this.Id);
 	}
 }
