@@ -87,10 +87,8 @@ class PHPCFGToUDGConverter extends CFGToUDGConverter {
 				useDefGraph.addUseDefsForBlock(statementNode, usesAndDefs);
             }
         }
-
-        String prefix = Long.toString(((AbstractCFGNode)cfg.getEntryNode()).getNodeId()) + "_local";
-		makeSymbolsGlobal(useDefGraph, prefix);
-
+		if (((AbstractCFGNode)cfg.getExitNode()).getNodeId() == 157717)
+			System.out.print("");
 		return useDefGraph;
     }
 
@@ -107,9 +105,9 @@ class PHPCFGToUDGConverter extends CFGToUDGConverter {
 	public void makeSymbolsGlobal(PHPUseDefGraph useDefGraph, String prefix) {
 	    for (Map.Entry<Long, LinkedList<UseOrDef>> e : useDefGraph.getUseDefsForBlock().entrySet()) {
 			for (UseOrDef uod : e.getValue()) {
-				if (!useDefGraph.isGlobalSymbol(uod.symbol.name) && !superglobals.contains(uod.symbol.name)) {
+				if (!useDefGraph.isGlobalSymbol(uod.symbol.origName) && !superglobals.contains(uod.symbol.origName)) {
 				    String newName = addGlobalPrefix(prefix, uod.symbol.name);
-				    if (!useDefGraph.isParamRef(uod.symbol.name))
+				    if (!useDefGraph.isParamRef(uod.symbol.origName))
 				        useDefGraph.addLocalSymbol(newName);
 					uod.symbol.name = newName;
 				}
@@ -117,10 +115,10 @@ class PHPCFGToUDGConverter extends CFGToUDGConverter {
 				// Check if symbol has a variable index, and rewrite if necessary
 				if (uod.symbol.isArray &&
 					uod.symbol.isIndexVar &&
-					!useDefGraph.isGlobalSymbol(uod.symbol.name) &&
-					!superglobals.contains(uod.symbol.name)) {
-				    String newName = addGlobalPrefix(prefix, uod.symbol.name);
-					if (!useDefGraph.isParamRef(uod.symbol.index))
+					!useDefGraph.isGlobalSymbol(uod.symbol.origIndex) &&
+					!superglobals.contains(uod.symbol.origIndex)) {
+				    String newName = addGlobalPrefix(prefix, uod.symbol.index);
+					if (!useDefGraph.isParamRef(uod.symbol.origIndex))
 					    useDefGraph.addLocalSymbol(newName);
 				    uod.symbol.index = newName;
 				}

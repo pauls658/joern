@@ -123,7 +123,7 @@ public class Main {
 
 			FileOutputStream outFile;
 			for (Map.Entry<Long, LinkedList<UseOrDef>> e : udg.getDefUseMap().entrySet()) {
-			    // The id is for args is already updated
+			    // The id for args is already updated
 				for (UseOrDef uod : e.getValue()) {
 					if (uod.symbol.isArg) {
 						outFile = argdefuseFile;
@@ -137,11 +137,13 @@ public class Main {
 					outFile.write((Long.toString(e.getKey()) + "," + uod.symbol.name + "\n").getBytes());
 					if (uod.symbol.isArray && uod.symbol.isIndexVar) {
 						// For now just output the index as a use
-						BBuseFile.write((Long.toString(e.getKey()) + "," + uod.symbol.index + "\n").getBytes());
+						if (uod.symbol.isArg)
+							argdefuseFile.write((Long.toString(e.getKey()) + "," + uod.symbol.index + "\n").getBytes());
+						else
+							BBuseFile.write((Long.toString(e.getKey()) + "," + uod.symbol.index + "\n").getBytes());
 					}
 				}
 			}
-
 		}
 
 
