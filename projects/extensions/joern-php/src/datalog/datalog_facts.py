@@ -60,7 +60,6 @@ def preprocesses_graph(g):
         if "uses" not in d and \
         "defs" not in d and \
         only_FLOWSTO_edges(g, n):
-            changed = True
             remove_node(g, n, "FLOWS_TO")
 
     print "Reduced graph to %0.2f%% original size" % ((float(g.order())/float(orig_node_count))*100)
