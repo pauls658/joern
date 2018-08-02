@@ -133,19 +133,13 @@ public class Main {
 						outFile = BBuseFile;
 					}
 
-					// name is always output
-					outFile.write((Long.toString(e.getKey()) + "," + uod.symbol.name + "\n").getBytes());
-					if (uod.symbol.isArray && uod.symbol.isIndexVar) {
-						// For now just output the index as a use
-						if (uod.symbol.isArg)
-							argdefuseFile.write((Long.toString(e.getKey()) + "," + uod.symbol.index + "\n").getBytes());
-						else
-							BBuseFile.write((Long.toString(e.getKey()) + "," + uod.symbol.index + "\n").getBytes());
-					}
+					outFile.write((Long.toString(e.getKey()) + "," + uod.symbol.getSymbolEncoding() + "\n").getBytes());
 				}
 			}
 		}
 
+		// Debug
+        writeConstantMap(cfgToUDG.getConstantMap());
 
 		// now that we wrapped up all functions, let's finish off with the call graph
 		CG cg = PHPCGFactory.newInstance();
@@ -156,6 +150,15 @@ public class Main {
 		BBuseFile.close();
 		BBdefFile.close();
 		argdefuseFile.close();
+	}
+
+	public static void writeConstantMap(HashMap<String, Long> constantMap) throws IOException {
+		FileOutputStream out = new FileOutputStream("defuse_csv/constantMap.csv");
+		out.write(("constId,string").getBytes());
+		for (Map.Entry<String, Long> e : constantMap.entrySet()) {
+			out.write((Long.toString(e.getValue()) + "," + e.getKey()).getBytes());
+		}
+		out.close();
 	}
 
 	private static void parseCommandLine(String[] args)	{

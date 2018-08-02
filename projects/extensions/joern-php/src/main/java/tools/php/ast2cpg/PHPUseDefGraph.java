@@ -42,8 +42,6 @@ class PHPUseDefGraph extends UseDefGraph {
 		return useDefsForBlock;
 	}
 
-	public HashMap<Long, LinkedList<UseOrDef>> getUseDefsForBlock() { return useDefsForBlock; }
-
 	public void addFuncGlobal(String g) {
 		this.funcGlobals.add(g);
 	}

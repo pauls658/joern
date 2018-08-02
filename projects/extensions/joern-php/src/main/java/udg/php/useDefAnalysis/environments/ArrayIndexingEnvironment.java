@@ -48,6 +48,10 @@ public class ArrayIndexingEnvironment extends UseDefEnvironment
 				// Save the array symbol til we know more about the index
 				this.arraySymbol = childSymbols.get(0);
 				this.arraySymbol.isArray = true;
+				if (ourDepth > 1) {
+					// The dimension is > 1, so we can't kill previous defs
+					this.arraySymbol.star = true;
+				}
 
 				// need the dimension before we can add it to the symbols
 			} else {
@@ -55,14 +59,17 @@ public class ArrayIndexingEnvironment extends UseDefEnvironment
 					// Great! constant array index
 					this.arraySymbol.setIndex(child.getEscapedCodeStr());
 					this.arraySymbol.isIndexVar = false;
+					this.arraySymbol.arrayType = Symbol.ARRAY_CONST_INDEX;
 				} else if (child.getTypeAsString().equals("Variable")) {
 					// ok... variable index... maybe we can resolve it later
 					assert childSymbols.size() == 1;
 					this.arraySymbol.setIndex(childSymbols.get(0).name);
 					this.arraySymbol.isIndexVar = true;
+					this.arraySymbol.arrayType = Symbol.ARRAY_VAR_INDEX;
 				} else {
 					// Bollocks! unknown access
 					this.arraySymbol.setIndex(null);
+					this.arraySymbol.arrayType = Symbol.ARRAY_UNKNOWN_INDEX;
 				}
 				// We got the array name in the last step
 				// At this point, we are ready to report symbols
@@ -70,7 +77,7 @@ public class ArrayIndexingEnvironment extends UseDefEnvironment
 				// If we have something in the array index, then the symbol
 				// will be reported with the array name. Otherwise, report
 				// the use symbols.
-				if (this.arraySymbol.index == null) {
+				if (this.arraySymbol.arrayType == Symbol.ARRAY_UNKNOWN_INDEX) {
 					// we did not resolve the index, so we pass these
 					// up as uses. TODO: only if not analyzing arg list
 					this.useSymbols.addAll(childSymbols);

@@ -8,6 +8,7 @@ import cfg.nodes.ASTNodeContainer;
 import cfg.nodes.AbstractCFGNode;
 import cfg.nodes.CFGNode;
 import udg.php.useDefAnalysis.PHPASTDefUseAnalyzer;
+import udg.php.useDefAnalysis.Symbol;
 import udg.php.useDefAnalysis.environments.UseDefEnvironment;
 import udg.useDefGraph.UseDefGraph;
 import udg.php.useDefGraph.UseOrDef;
@@ -17,7 +18,11 @@ import udg.CFGToUDGConverter;
 
 class PHPCFGToUDGConverter extends CFGToUDGConverter {
     private PHPASTDefUseAnalyzer phpAnalyzer;
+    // Name of PHP super global arrays
 	private HashSet<String> superglobals = new HashSet<>();
+	// Maps literal strings to an ID for ease of output encoding
+	private HashMap<String, Long> constantMap;
+	private Long constantCounter;
 
 	public PHPCFGToUDGConverter() {
 		superglobals.add("_GET");
@@ -29,6 +34,8 @@ class PHPCFGToUDGConverter extends CFGToUDGConverter {
 		superglobals.add("_ENV");
 		superglobals.add("_COOKIE");
 		superglobals.add("_SESSION");
+		constantMap = new HashMap<>();
+		constantCounter = 0l;
 	}
 
 	public void setPHPASTDefUseAnalyzer(PHPASTDefUseAnalyzer analyzer)
@@ -87,23 +94,49 @@ class PHPCFGToUDGConverter extends CFGToUDGConverter {
 				useDefGraph.addUseDefsForBlock(statementNode, usesAndDefs);
             }
         }
-		if (((AbstractCFGNode)cfg.getExitNode()).getNodeId() == 157717)
-			System.out.print("");
+
+        translateLiteralStrings(useDefGraph);
+
 		return useDefGraph;
     }
 
-    private String addGlobalPrefix(String prefix, String symbol) {
+	private String translateLiteral(String index) {
+	    Long constId = constantMap.get(index);
+	    if (constId == null) {
+	    	constId = constantCounter;
+	    	constantCounter++;
+	    	constantMap.put(index, constId);
+		}
+		return Long.toString(constId);
+	}
+
+	public HashMap getConstantMap() {
+		return constantMap;
+	}
+
+    /*
+    Translates the literal strings of the use def graph to integers for ease of encoding
+     */
+	private void translateLiteralStrings(PHPUseDefGraph useDefGraph) {
+	    for (Map.Entry<Long, LinkedList<UseOrDef>> e : useDefGraph.getDefUseMap().entrySet()) {
+	    	for (UseOrDef uod : e.getValue()) {
+	    		if (uod.symbol.isArray && uod.symbol.arrayType == Symbol.ARRAY_CONST_INDEX) {
+	    			uod.symbol.index = Symbol.indexPrefix + "_" + translateLiteral(uod.symbol.index);
+				} // either no index, or variable index. either case we don't rewrite
+			}
+		}
+	}
+
+	private String addGlobalPrefix(String prefix, String symbol) {
 		// Just in case we didn't copy the Symbol. We don't want to add the prefix twice
-		if (!symbol.startsWith(prefix))
-			return prefix + "_" + symbol;
-		else
-			return symbol;
+		assert !symbol.startsWith(prefix);
+		return prefix + "_" + symbol;
 	}
 
 	// Determines which variables are non-global, and therefore should be rewritten. Also
 	// builds the local
 	public void makeSymbolsGlobal(PHPUseDefGraph useDefGraph, String prefix) {
-	    for (Map.Entry<Long, LinkedList<UseOrDef>> e : useDefGraph.getUseDefsForBlock().entrySet()) {
+	    for (Map.Entry<Long, LinkedList<UseOrDef>> e : useDefGraph.getDefUseMap().entrySet()) {
 			for (UseOrDef uod : e.getValue()) {
 				if (!useDefGraph.isGlobalSymbol(uod.symbol.origName) && !superglobals.contains(uod.symbol.origName)) {
 				    String newName = addGlobalPrefix(prefix, uod.symbol.name);

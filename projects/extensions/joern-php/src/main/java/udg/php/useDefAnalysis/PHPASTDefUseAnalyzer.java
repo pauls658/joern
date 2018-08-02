@@ -89,7 +89,6 @@ public class PHPASTDefUseAnalyzer
 	 */
 	public Collection<UseOrDef> analyzeAST(ASTProvider astProvider)
 	{
-
 		String nodeType = astProvider.getTypeAsString();
 		if( nodeType.equals(Variable.class.getSimpleName()) ||
 			nodeType.equals(Constant.class.getSimpleName()) ||

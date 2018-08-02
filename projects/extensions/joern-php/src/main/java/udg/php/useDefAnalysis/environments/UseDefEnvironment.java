@@ -9,8 +9,6 @@ import udg.php.useDefGraph.UseOrDef;
 import java.util.Collection;
 import java.util.LinkedList;
 
-// Brandon
-
 /**
  * Base-class and default implementation of UseDefEnvironment.
  */
@@ -98,7 +96,7 @@ public class UseDefEnvironment
 		{
 			UseOrDef useOrDef = new UseOrDef();
 			useOrDef.isDef = isDef;
-			useOrDef.symbol = s;
+			useOrDef.symbol = s.copy();
 			useOrDef.astProvider = this.astProvider;
 			retval.add(useOrDef);
 		}
