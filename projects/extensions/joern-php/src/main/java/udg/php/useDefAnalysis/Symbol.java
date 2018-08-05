@@ -30,17 +30,17 @@ public class Symbol {
         String enc = name;
         if (isArray) {
             enc += "[";
-            if (arrayType == ARRAY_VAR_INDEX)
-                enc += "$";
-
-            if (arrayType == ARRAY_UNKNOWN_INDEX)
+            if (arrayType == ARRAY_CONST_INDEX) {
+                // Don't add implicit unknown uses yet. When doing the array-type analysis
+                // we want to know about explicit uses only
+                enc += index ;//+ ";" + name + "[" + unknownIndex;
+            } else if (arrayType == ARRAY_VAR_INDEX) {
+                enc += "$" + index;
+            } else {
                 enc += unknownIndex;
-            else
-                enc += index;
-
-            if (star || arrayType == ARRAY_UNKNOWN_INDEX)
-                enc += "*";
-        } else if (star) {
+            }
+        }
+        if (star) {
             enc += "*";
         }
         return enc;
