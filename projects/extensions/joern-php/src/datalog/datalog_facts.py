@@ -64,6 +64,7 @@ def preprocesses_graph(g):
 
     print "Reduced graph to %0.2f%% original size" % ((float(g.order())/float(orig_node_count))*100)
 
+# id -> def/uses
 stmt_defs = {}
 stmt_uses = {}
 var_map = {}
@@ -86,7 +87,7 @@ def load_def_use_info():
             distinct_vars.update(uses)
             stmt_uses[stmt_id] = uses
 
-    # symbol_map 
+    # symbol_map
     var_id = 0
     for symbol in distinct_vars:
         var_map[symbol] = var_id
