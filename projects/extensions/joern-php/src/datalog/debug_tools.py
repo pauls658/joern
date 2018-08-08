@@ -16,6 +16,26 @@ def load_id_map():
         reverse_id_map[orig].append(new)
     return id_map, reverse_id_map
 
+def load_defs():
+    fd = open("tmp/def.csv", "r")
+    defs = defaultdict(list)
+    for line in fd:
+        n, var = line.strip().split("\t")
+        n = int(n)
+        defs[n].append(var)
+    fd.close()
+    return defs
+
+def load_uses():
+    fd = open("tmp/use.csv", "r")
+    uses = defaultdict(list)
+    for line in fd:
+        n, var = line.strip().split("\t")
+        n = int(n)
+        uses[n].append(var)
+    fd.close()
+    return uses
+
 def load_var_map():
     fd = open("tmp/var_map.csv", "r")
     var_map = {}
@@ -85,6 +105,18 @@ def datadeps_to_cypher():
         fd.write("%d,%d,%s\n" % (def_stmt, use_stmt, var_id))
     fd.close()
 
+def defuses_to_cypher():
+    fd = open("cypher_defuses.csv", "w+")
+    id_map, rev_id_map = load_id_map()
+    defs = load_defs()
+    uses = load_uses()
+    fd.write("id,defs,uses\n")
+    for new, orig in id_map.iteritems():
+        fd.write("%d,%s,%s\n" % (orig,
+            ";".join(defs[new]),
+            ";".join(uses[new])))
+    fd.close()
+
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         cmd = "<none>"
@@ -93,7 +125,8 @@ if __name__ == "__main__":
     cmds = {
             "livevars" : livevars_for_stmt,
             "echos" : unique_echos,
-            "datadeps" : datadeps_to_cypher
+            "datadeps" : datadeps_to_cypher,
+            "defuses" : defuses_to_cypher
     }
     if cmd not in cmds:
         print "Invalid command: %s" % (cmd)

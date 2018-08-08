@@ -1,5 +1,6 @@
 .decl edge(start:number, end:number)
 .decl def(stmt:number, var:number)
+.decl star_def(stmt:number, var:number)
 .decl use(stmt:number, var:number)
 .decl source(stmt:number)
 .decl sink(stmt:number)
@@ -12,8 +13,16 @@
 .decl reachable_safe_sink(stmt:number)
 
 .decl livedef(var:number, def_stmt:number, this_stmt:number)
-.output unreachable_tainted_sink
-.output reachable_safe_sink
+
+.input edge(IO=file, filename="tmp/edge.csv")
+.input def(IO=file, filename="tmp/def.csv")
+.input star_def(IO=file, filename="tmp/star_def.csv")
+.input use(IO=file, filename="tmp/use.csv")
+.input source(IO=file, filename="tmp/source.csv")
+.input sink(IO=file, filename="tmp/sink.csv")
+.input nokill(IO=file, filename="tmp/nokill.csv")
+.input gold_tainted_sink(IO=file, filename="tmp/tainted_sink.csv")
+.input safe_sink(IO=file, filename="tmp/safe_sink.csv")
 
 // only init liveness for source variables
 livedef(def_stmt, var, def_stmt) :- def(def_stmt, var), source(def_stmt).
@@ -24,6 +33,7 @@ livedef(prev_stmt, var, this_stmt) :- livedef(prev_stmt, var, prev_stmt), edge(p
 // propogate liveness until we reach an assignment
 livedef(def_stmt, var, this_stmt) :- livedef(def_stmt, var, prev_stmt), edge(prev_stmt, this_stmt), !def(prev_stmt, var).
 livedef(def_stmt, var, this_stmt) :- livedef(def_stmt, var, prev_stmt), edge(prev_stmt, this_stmt), nokill(prev_stmt).
+livedef(def_stmt, var, this_stmt) :- livedef(def_stmt, var, prev_stmt), edge(prev_stmt, this_stmt), star_def(def_stmt, var).
 
 // statements that use a live def are tainted
 tainted(this_stmt) :- livedef(def_stmt, var, this_stmt), use(this_stmt, var).
@@ -37,3 +47,6 @@ tainted_sink(this_stmt) :- sink(this_stmt), tainted(this_stmt).
 // debugging
 unreachable_tainted_sink(stmt) :- !tainted_sink(stmt), gold_tainted_sink(stmt).
 reachable_safe_sink(stmt) :- tainted_sink(stmt), safe_sink(stmt).
+
+.output unreachable_tainted_sink
+.output reachable_safe_sink

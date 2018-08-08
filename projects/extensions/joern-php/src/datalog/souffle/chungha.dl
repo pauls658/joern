@@ -1,5 +1,6 @@
 .decl edge(start:number, end:number)
 .decl def(stmt:number, var:number)
+.decl star_def(stmt:number, var:number)
 .decl use(stmt:number, var:number)
 .decl source(stmt:number)
 .decl sink(stmt:number)
@@ -10,6 +11,7 @@
 
 .input edge(IO=file, filename="tmp/edge.csv")
 .input def(IO=file, filename="tmp/def.csv")
+.input star_def(IO=file, filename="tmp/star_def.csv")
 .input use(IO=file, filename="tmp/use.csv")
 .input source(IO=file, filename="tmp/source.csv")
 .input sink(IO=file, filename="tmp/sink.csv")
@@ -26,6 +28,8 @@ livedef(prev_stmt, var, this_stmt) :- livedef(prev_stmt, var, prev_stmt), edge(p
 // propogate liveness until we reach an assignment
 livedef(def_stmt, var, this_stmt) :- livedef(def_stmt, var, prev_stmt), edge(prev_stmt, this_stmt), !def(prev_stmt, var).
 livedef(def_stmt, var, this_stmt) :- livedef(def_stmt, var, prev_stmt), edge(prev_stmt, this_stmt), nokill(prev_stmt).
+// TODO: kill star_defs at func exits if we can
+livedef(def_stmt, var, this_stmt) :- livedef(def_stmt, var, prev_stmt), edge(prev_stmt, this_stmt), star_def(def_stmt, var).
 
 // statements that use a live def are tainted
 tainted(this_stmt) :- livedef(def_stmt, var, this_stmt), use(this_stmt, var).
@@ -42,4 +46,3 @@ datadep(def_stmt, use_stmt, var) :- livedef(def_stmt, var, use_stmt), use(use_st
 .output tainted_sink
 .output datadep
 .output livedef
-
