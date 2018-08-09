@@ -117,6 +117,27 @@ def defuses_to_cypher():
             ";".join(uses[new])))
     fd.close()
 
+def copied_cfg():
+    id_map, rev_id_map = load_id_map()
+    var_map, rev_var_map = load_var_map()
+    defs = load_defs()
+    uses = load_uses()
+    fd = open("nodes.csv", "w+")
+    fd.write("id,def,use,orig_id\n")
+    for new, orig in id_map.iteritems():
+        fd.write("%d,%s,%s,%d\n" % (new,
+            ";".join(defs[new]),
+            ";".join(uses[new]),
+            orig))
+    fd.close()
+
+    datadeps = load_data_deps()
+    fd = open("datadeps.csv", "w+") 
+    fd.write("start,end,var\n")
+    for s, e, v in datadeps:
+        fd.write("%d,%d,%s\n" % (s, e, var_map[v]))
+    fd.close()
+
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         cmd = "<none>"
@@ -126,7 +147,8 @@ if __name__ == "__main__":
             "livevars" : livevars_for_stmt,
             "echos" : unique_echos,
             "datadeps" : datadeps_to_cypher,
-            "defuses" : defuses_to_cypher
+            "defuses" : defuses_to_cypher,
+            "copiedcfg" : copied_cfg
     }
     if cmd not in cmds:
         print "Invalid command: %s" % (cmd)
