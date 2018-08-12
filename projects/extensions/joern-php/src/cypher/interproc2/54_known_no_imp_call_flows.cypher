@@ -7,6 +7,7 @@ call.name in ["escapeshellarg", "utf8_encode", "utf8_decode", "stripslashes", "c
 not (call)-[:CALLS]->() and
 ((aexit.type = "arg_exit" and aentry.childnum = aexit.childnum)
  or aexit.type = "return")
+and aentry.call_id = aexit.call_id
 create 
 (aentry)-[:PROPOGATE]->(aexit)
 return distinct ID(call) as donecallid;
@@ -20,6 +21,7 @@ call.name in ["strtr", "array_pad"] and
 not (call)-[:CALLS]->() and
 ((aexit.type = "arg_exit" and aentry.childnum = aexit.childnum) or 
  (aexit.type = "return" and (aentry.childnum = 0 or aentry.childnum = 2)))
+and aentry.call_id = aexit.call_id
 create 
 (aentry)-[:PROPOGATE]->(aexit)
 return distinct ID(call) as donecallid;
@@ -33,6 +35,7 @@ call.name in ["array_splice"] and
 not (call)-[:CALLS]->() and
 ((aexit.type = "arg_exit" and aentry.childnum = aexit.childnum) or 
  (aexit.type = "return" and (aentry.childnum = 0 or aentry.childnum = 3)))
+and aentry.call_id = aexit.call_id
 create 
 (aentry)-[:PROPOGATE]->(aexit)
 return distinct ID(call) as donecallid;
@@ -46,6 +49,7 @@ call.name in ["substr_replace"] and
 not (call)-[:CALLS]->() and
 ((aexit.type = "arg_exit" and aentry.childnum = aexit.childnum) or 
  (aexit.type = "return" and (aentry.childnum = 0 or aentry.childnum = 1)))
+and aentry.call_id = aexit.call_id
 create 
 (aentry)-[:PROPOGATE]->(aexit)
 return distinct ID(call) as donecallid;
@@ -61,6 +65,7 @@ call.name in ["str_replace", "preg_replace"] and
 not (call)-[:CALLS]->() and
 ((aexit.type = "arg_exit" and aentry.childnum = aexit.childnum) or 
  (aexit.type = "return" and (aentry.childnum = 1 or aentry.childnum = 2)))
+and aentry.call_id = aexit.call_id
 create 
 (aentry)-[:PROPOGATE]->(aexit)
 return distinct ID(call) as donecallid;
@@ -74,6 +79,7 @@ call.name in ["preg_replace_callback"] and
 not (call)-[:CALLS]->() and
 ((aexit.type = "arg_exit" and aentry.childnum = aexit.childnum) or 
  (aexit.type = "return" and aentry.childnum = 2))
+and aentry.call_id = aexit.call_id
 create 
 (aentry)-[:PROPOGATE]->(aexit)
 return distinct ID(call) as donecallid;
@@ -87,6 +93,7 @@ call.name in ["mhash", "array_search", "preg_split", "array_map", "explode"] and
 not (call)-[:CALLS]->() and
 ((aexit.type = "arg_exit" and aentry.childnum = aexit.childnum) or 
  (aexit.type = "return" and aentry.childnum = 1))
+and aentry.call_id = aexit.call_id
 create 
 (aentry)-[:PROPOGATE]->(aexit)
 return distinct ID(call) as donecallid;
@@ -101,6 +108,7 @@ call.name in ["strrchr", "end", "escapeshellcmd", "dechex", "strrev", "chunk_spl
 not (call)-[:CALLS]->() and
 ((aexit.type = "arg_exit" and aentry.childnum = aexit.childnum) or 
  (aexit.type = "return" and aentry.childnum = 0))
+and aentry.call_id = aexit.call_id
 create 
 (aentry)-[:PROPOGATE]->(aexit)
 return distinct ID(call) as donecallid;
@@ -114,6 +122,7 @@ call.name in ["eregi", "ereg", "preg_match", "preg_match_all"] and
 not (call)-[:CALLS]->() and
 (aentry.childnum = aexit.childnum or 
  (aentry.childnum = 1 and aexit.childnum = 2))
+and aentry.call_id = aexit.call_id
 create 
 (aentry)-[:PROPOGATE]->(aexit)
 return distinct ID(call) as donecallid;
@@ -128,6 +137,7 @@ call.name in ["array_unshift", "define"] and
 not (call)-[:CALLS]->() and
 (aentry.childnum = aexit.childnum or
  (aentry.childnum = 1 and aexit.childnum = 0))
+and aentry.call_id = aexit.call_id
 create 
 (aentry)-[:PROPOGATE]->(aexit)
 return distinct ID(call) as donecallid;
@@ -140,6 +150,7 @@ exists(call.name) and
 call.name in ["popen", "pclose", "strftime", "similar_text", "assert_options", "assert", "bind_textdomain_codeset", "setlocale", "mb_language", "mb_http_output", "umask", "usleep", "rewind", "is_bool", "count_chars", "get_class", "is_resource", "range", "create_function", "trigger_error", "strcspn", "gmdate", "mkdir", "session_set_cookie_params", "copy", "ini_set", "mb_internal_encoding", "mb_strlen", "mb_strpos", "mt_srand", "crc32", "strcasecmp", "strnatcasecmp", "ldap_search", "ldap_count_entries", "ldap_get_entries", "ldap_free_result", "ldap_connect", "ldap_error", "ldap_set_option", "ldap_bind", "is_string", "mt_rand", "is_null", "get_html_translation_table", "array_key_exists", "dir", "fileowner", "is_array", "array_walk", "func_get_args", "func_get_arg", "fread", "chmod", "mcrypt_generic_deinit", "mcrypt_module_close", "mcrypt_module_open", "mcrypt_create_iv", "mcrypt_enc_get_iv_size", "mcrypt_generic_init", "mcrypt_generic", "mdecrypt_generic", "error_log", "socket_set_blocking", "socket_set_block", "settype", "gettype", "set_time_limit", "unlink", "exec", "is_int", "fgetcsv", "flock", "printf", "feof", "opendir", "readdir", "closedir", "putenv", "strcmp", "class_exists", "fgets", "fputs","fsockopen", "extension_loaded", "is_executable", "is_file", "is_dir", "is_writable", "is_readable", "posix_getpwuid", "posix_getgrgid", "date", "filemtime", "file", "substr_count", "session_module_name", "session_set_save_handler", "is_numeric", "rename", "move_uploaded_file", "is_uploaded_file", "filesize", "fwrite", "fopen", "fclose", "file_exists", "header", "sizeof", "count", "array_push", "in_array", "strlen", "strpos", "strrpos", "function_exists", "mb_detect_encoding"] and
 not (call)-[:CALLS]->() and
 aentry.childnum = aexit.childnum
+and aentry.call_id = aexit.call_id
 create 
 (aentry)-[:PROPOGATE]->(aexit)
 return distinct ID(call) as donecallid;

@@ -36,5 +36,6 @@ where
 not exists(call.done) and
 not (call)-[:CALLS]->() and
 aexit.type in ["arg_exit", "return"]
+and aentry.call_id = aexit.call_id
 create 
 (aentry)-[:PROPOGATE]->(aexit); 
