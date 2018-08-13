@@ -1,4 +1,4 @@
-!/bin/bash
+#!/bin/bash
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
@@ -7,7 +7,7 @@ python $DIR/../debug_tools.py copiedcfg
 echo 'using periodic commit
 load csv with headers from "file:///home/brandon/joern/projects/extensions/joern-php/src/datalog/nodes.csv" as line
 create
-(new:CCFG{id:toInteger(line.id),defs:coalesce(line.defs, ""),uses:coalesce(line.uses, ""),orig_id:toInteger(line.orig_id)})
+(new:CCFG{id:toInteger(line.id),defs:coalesce(line.def, ""),uses:coalesce(line.use, ""),orig_id:toInteger(line.orig_id)})
 return toInteger(line.id),ID(new);' | cypher-shell > $DIR/../cypher_id_map
 
 declare -A cypher_id_map

@@ -9,7 +9,7 @@ if [[ -z $1 || -z $2 ]]; then
 	exit 1
 fi
 
-var_id=$( map_var_name $2 ) 
+var_id=$( map_var_name "$2" ) 
 if [[ "$?" == "1" ]]; then
 	exit "var: $2 not found"
 	exit 1
@@ -25,6 +25,10 @@ echo "$stmts $var_id"
 
 for stmt in $stmts; do
 	for def in $( grep -P "\t$var_id\t$stmt\$" $DIR/../livedef.csv | grep -o -E "^[0-9]*" ); do
-		map_node_for $def
+		if [[ -z $3 ]]; then
+			map_node_for $def
+		else
+			echo $def
+		fi
 	done
 done

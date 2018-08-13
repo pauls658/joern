@@ -18,11 +18,11 @@ fi
 
 # Second, get the var ids
 for id in $ids; do
-	var_ids=$( grep -P "\t$id\$" livedef.csv | grep -o -P "\t[0-9]*\t" | grep -oE "[0-9]*" | sort | uniq )
+	var_ids=$( grep -P "\t$id\$" $DIR/../livedef.csv | grep -o -P "\t[0-9]*\t" | grep -oE "[0-9]*" | sort | uniq )
 done
 
 declare -A var_map
-for line in $( cat tmp/var_map.csv ); do 
+for line in $( cat $DIR/../tmp/var_map.csv ); do 
 	id=${line/,*/}
 	var=${line/*,/}
 	var_map[$id]=$var

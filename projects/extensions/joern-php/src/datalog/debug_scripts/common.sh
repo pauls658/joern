@@ -3,7 +3,7 @@
 # $1: the translated id 
 # echos the original id
 map_node_for() {
-	grep "^$1" $DIR/../tmp/id_map.csv | grep -o ",[0-9]*\$"
+	grep "^$1," $DIR/../tmp/id_map.csv | grep -o ",[0-9]*\$"
 	if [[ "$?" == "1" ]]; then
 		echo "Not found"
 		return 1

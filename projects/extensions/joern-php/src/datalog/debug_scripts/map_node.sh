@@ -13,7 +13,7 @@ if [[ "$2" == "rev" ]]; then
 		echo "Not found"
 	fi
 elif [[ "$2" == "for" ]]; then
-	grep "^$1" $DIR/../tmp/id_map.csv | grep -o ",[0-9]*\$"
+	grep "^$1," $DIR/../tmp/id_map.csv | grep -o ",[0-9]*\$"
 	if [[ "$?" == "1" ]]; then
 		echo "Not found"
 	fi
