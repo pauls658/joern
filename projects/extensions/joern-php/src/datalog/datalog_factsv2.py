@@ -47,21 +47,19 @@ def only_FLOWSTO_edges(g, n):
             all([d["label"] == "FLOWS_TO" for u, v, d in g.in_edges(nbunch=n, data=True)]) and \
             all([d["label"] == "FLOWS_TO" for u, v, d in g.out_edges(nbunch=n, data=True)])
 
-def remove_node(g, n, label):
+def remove_node(g, n):
     preds = map(lambda e: e[0], g.in_edges(nbunch=n))
     succs = map(lambda e: e[1], g.out_edges(nbunch=n))
     for p in preds:
         for s in succs:
-            g.add_edge(p, s, label=label)
+            g.add_edge(p, s)
     g.remove_node(n)
 
 def preprocesses_graph(g):
     orig_node_count = g.order()
     for n, d in g.nodes(data=True):
-        if "uses" not in d and \
-        "defs" not in d and \
-        only_FLOWSTO_edges(g, n):
-            remove_node(g, n, "FLOWS_TO")
+        if "uses" not in d and "defs" not in d:
+            remove_node(g, n)
 
     print "Reduced graph to %0.2f%% original size" % ((float(g.order())/float(orig_node_count))*100)
 
@@ -161,117 +159,6 @@ def load_def_use_info():
             uses = set(map(lambda x: Symbol(x), filter(lambda x: x, row[2].split(";"))))
             stmt_uses[stmt_id] = uses
 
-indexes = {}
-def make_graph_indexes(g):
-    indexes["symbol_uses"] = defaultdict(set)
-    for n, data in g.nodes(data=True):
-        for sym in data.get("uses", []):
-            indexes["symbol_uses"][sym.enc].add(n)
-
-"""
-The keys of array_indexes are symbols that are indexed (implying array-hood)
-somewhere in the program. Also removes def of whole array symbol, and replaces it
-with defining the unknown index of the array.
-"""
-def handle_whole_arrays(udg, array_indexes):
-    global indexes
-
-    # Array symbols that we need to check for shit
-    work = array_indexes.keys()
-    # Symbols that we analyzed
-    analyzed_syms = set()
-    # Stmts that we have added defs for
-    modified_stmts = set()
-    
-    new_syms = []
-    remove_defs = set()
-    sym_obj = Symbol("dummy")
-    while work:
-        sym = work.pop()
-        if sym in analyzed_syms: continue
-        analyzed_syms.add(sym)
-
-        sym_obj.__init__(sym) # lol
-        use_stmts = indexes["symbol_uses"].get(sym, [])
-        for n in use_stmts:
-            if not sym_obj.isArray:
-                # use the known indexes and the special unknown index
-                new_syms.append((n, sym + "[" + Symbol.unknown_index, "uses"))
-                for i in array_indexes.get(sym, []):
-                    new_syms.append((n, sym + "[" + i, "uses"))
-            # else: we don't track beyond 1 dimension
-
-            # we have already add extra defs for each def at this
-            # statement
-            if n in modified_stmts: continue
-            modified_stmts.add(n)
-            remove_defs.clear()
-            for d in udg.nodes[n].get("defs", []):
-                if not d.isArray:
-                    # add a def of unknown index. Also remove the def of
-                    # the whole symbol because, in the next step, we
-                    # add a use of the unknown index for every use of
-                    # the whole symbol. This cuts down on complexity of
-                    # reaching definitions.
-                    new_syms.append((n, d.name + "[" + Symbol.unknown_index, "defs"))
-                    remove_defs.add(d)
-                    work.append(d.name)
-                elif d.arrayType == Symbol.ARRAY_CONST_INDEX:
-                    work.append(d.name + "[" + d.index)
-                    work.append(d.name + "[" + Symbol.unknown_index)
-                else:
-                    assert d.arrayType == Symbol.ARRAY_UNKNOWN_INDEX
-                    work.append(d.name + "[" + Symbol.unknown_index)
-                    for i in array_indexes.get(d.name, []):
-                        work.append(d.name + "[" + Symbol.unknown_index)
-            for d in remove_defs:
-                udg.nodes[n]["defs"].remove(d)
-
-    # make sure defintions of array symbols are converted to define their
-    # unknown index.
-    new_defs = set()
-    for n, data in udg.nodes(data=True):
-        new_defs.clear()
-        for d in data.get("defs", []):
-            if not d.isArray and d.name in array_indexes:
-                new_defs.add(Symbol(d.name + "[" + Symbol.unknown_index))
-            else:
-                new_defs.add(d)
-        if new_defs:
-            data["defs"].clear()
-            data["defs"].update(new_defs)
-    return new_syms
-
-"""
-Adds extra uses for known/unknown array indexes.
-    If the index is known, adds a use of the unknown index.
-    If the index is unknown, adds uses of all known indexes.
-"""
-def handle_array_indexes(udg, array_indexes):
-    new_uses = []
-
-    for n, data in udg.nodes(data=True):
-        for u in data.get("uses", []):
-            if u.isArray:
-                if u.arrayType == Symbol.ARRAY_CONST_INDEX:
-                    new_uses.append((n, u.name + "[" + Symbol.unknown_index, "uses"))
-                else:
-                    assert u.arrayType == Symbol.ARRAY_UNKNOWN_INDEX
-                    for i in array_indexes.get(u.name, []):
-                        new_uses.append((n, u.name + "[" + i, "uses"))
-
-    return new_uses
-
-"""
-uses is a list for triples, first element is a int node index, and
-the second is a String symbol, and the third element is a String "defs" or "uses".
-"""
-def add_syms_to_udg(udg, syms):
-    for n, sym, uod in syms:
-        data = udg.nodes[n]
-        if uod not in data:
-            data[uod] = set()
-        data[uod].add(Symbol(sym))
 
 sinks = set()
 safe_sinks = set()
@@ -535,9 +422,8 @@ def save_maps():
     out_fd.close()
 
     # for debugging
-    global var_map
     out_fd = open("tmp/var_map.csv", "w+")
-    for name, i in var_map.iteritems():
+    for name, i in Symbol.var_ids.iteritems():
         out_fd.write("%d,%s\n" % (i, name))
     out_fd.close()
 
@@ -685,6 +571,164 @@ def main(args):
 
     datalog_fd.close()
 
+indexes = {}
+def make_graph_indexes(g):
+    indexes["symbol_uses"] = defaultdict(set)
+    for n, data in g.nodes(data=True):
+        for sym in data.get("uses", []):
+            indexes["symbol_uses"][sym.enc].add(n)
+
+def handle_arrays(udg, array_indexes):
+    new_syms = set()
+    for n, data in udg.nodes(data=True):
+        new_syms.clear()
+        for d in data.get("defs", []):
+            if not d.isArray and d.name in array_indexes:
+                # whole symbol that is indexed elsewhere in the program
+                new_syms.add(Symbol(d.name + "[" + Symbol.unknown_index))
+            else:
+                # whole symbol that is never indexed -> no special
+                # handling, or a symbol with an index -> convert to
+                # special symbol when we output the graph
+                new_syms.add(d)
+        if new_syms:
+            data["defs"].clear()
+            data["defs"].update(new_syms)
+
+        new_syms.clear()
+        for u in data.get("uses", []):
+            if not u.isArray and u.name in array_indexes:
+                # whole symbol that is indexed elsewhere in the program ->
+                # rewrite to unknown index def
+                new_syms.add(Symbol(u.name + "[" + Symbol.unknown_index))
+                for i in array_indexes.get(u.name, []):
+                    new_syms.add(Symbol(u.name + "[" + i))
+            elif u.isArray and u.arrayType == Symbol.ARRAY_CONST_INDEX:
+                # indexed symbol with known index -> add use of
+                # unknown symbol
+                new_syms.add(u)
+                new_syms.add(Symbol(u.name + "[" + Symbol.unknown_index))
+            elif u.isArray and u.is_unknown_index():
+                # indexed with unknown symbol -> add use of all
+                # known symbs
+                new_syms.add(u)
+                for i in array_indexes.get(u.name, []):
+                    new_syms.add(Symbol(u.name + "[" + i))
+            else:
+                # whole symbol that is never indexed
+                new_syms.add(u)
+        if new_syms:
+            data["uses"].clear()
+            data["uses"].update(new_syms)
+
+            
+
+"""
+The keys of array_indexes are symbols that are indexed (implying array-hood)
+somewhere in the program. Also removes def of whole array symbol, and replaces it
+with defining the unknown index of the array.
+"""
+def handle_whole_arrays(udg, array_indexes):
+    global indexes
+
+    # Array symbols that we need to check for shit
+    work = array_indexes.keys()
+    # Symbols that we analyzed
+    analyzed_syms = set()
+    # Stmts that we have added defs for
+    modified_stmts = set()
+    
+    new_syms = []
+    remove_defs = set()
+    sym_obj = Symbol("dummy")
+    while work:
+        sym = work.pop()
+        if sym in analyzed_syms: continue
+        analyzed_syms.add(sym)
+
+        sym_obj.__init__(sym) # lol
+        use_stmts = indexes["symbol_uses"].get(sym, [])
+        for n in use_stmts:
+            if not sym_obj.isArray:
+                # use the known indexes and the special unknown index
+                new_syms.append((n, sym + "[" + Symbol.unknown_index, "uses"))
+                for i in array_indexes.get(sym, []):
+                    new_syms.append((n, sym + "[" + i, "uses"))
+            # else: we don't track beyond 1 dimension
+
+            # we have already add extra defs for each def at this
+            # statement
+            if n in modified_stmts: continue
+            modified_stmts.add(n)
+            remove_defs.clear()
+            for d in udg.nodes[n].get("defs", []):
+                if not d.isArray:
+                    # add a def of unknown index. Also remove the def of
+                    # the whole symbol because, in the next step, we
+                    # add a use of the unknown index for every use of
+                    # the whole symbol. This cuts down on complexity of
+                    # reaching definitions.
+                    new_syms.append((n, d.name + "[" + Symbol.unknown_index, "defs"))
+                    remove_defs.add(d)
+                    work.append(d.name)
+                elif d.arrayType == Symbol.ARRAY_CONST_INDEX:
+                    work.append(d.name + "[" + d.index)
+                    work.append(d.name + "[" + Symbol.unknown_index)
+                else:
+                    assert d.arrayType == Symbol.ARRAY_UNKNOWN_INDEX
+                    work.append(d.name + "[" + Symbol.unknown_index)
+                    for i in array_indexes.get(d.name, []):
+                        work.append(d.name + "[" + Symbol.unknown_index)
+            for d in remove_defs:
+                udg.nodes[n]["defs"].remove(d)
+
+    # make sure defintions of array symbols are converted to define their
+    # unknown index.
+    new_defs = set()
+    for n, data in udg.nodes(data=True):
+        new_defs.clear()
+        for d in data.get("defs", []):
+            if not d.isArray and d.name in array_indexes:
+                new_defs.add(Symbol(d.name + "[" + Symbol.unknown_index))
+            else:
+                new_defs.add(d)
+        if new_defs:
+            data["defs"].clear()
+            data["defs"].update(new_defs)
+    return new_syms
+
+"""
+Adds extra uses for known/unknown array indexes.
+    If the index is known, adds a use of the unknown index.
+    If the index is unknown, adds uses of all known indexes.
+"""
+def handle_array_indexes(udg, array_indexes):
+    new_uses = []
+
+    for n, data in udg.nodes(data=True):
+        for u in data.get("uses", []):
+            if u.isArray:
+                if u.arrayType == Symbol.ARRAY_CONST_INDEX:
+                    new_uses.append((n, u.name + "[" + Symbol.unknown_index, "uses"))
+                else:
+                    assert u.arrayType == Symbol.ARRAY_UNKNOWN_INDEX
+                    for i in array_indexes.get(u.name, []):
+                        new_uses.append((n, u.name + "[" + i, "uses"))
+
+    return new_uses
+
+"""
+uses is a list for triples, first element is a int node index, and
+the second is a String symbol, and the third element is a String "defs" or "uses".
+"""
+def add_syms_to_udg(udg, syms):
+    for n, sym, uod in syms:
+        data = udg.nodes[n]
+        if uod not in data:
+            data[uod] = set()
+        data[uod].add(Symbol(sym))
+
+
 def collect_array_indexes(g):
     array_indexes = defaultdict(set)
     for n, data in g.nodes(data=True):
@@ -743,28 +787,29 @@ def arrays(args):
     global g
     file_name = args[0]
     open_output_files()
-    #load_sinks()
-    load_testcase_sinks()
+    load_sinks()
+    #load_testcase_sinks()
     load_sources()
     load_def_use_info()
     g = graph_from_json()
-    #preprocesses_graph(g)
     entry = sqmail_entries(g, file_name)[0][0]
     calc_func_depths(g, entry)
-    depth = 0
+    depth = 6
     print "write_bounded_copied_cfg to depth %d" % (depth)
     copied_cfg = nx.MultiDiGraph()
     make_copied_cfg(g, entry, depth, copied_cfg)
     with open("tmp/cfg_exit", "w+") as fd:
         fd.write(str(g.nodes[entry]["exit_id"]))
     add_def_use_to_graph(copied_cfg)
+    preprocesses_graph(copied_cfg)
     array_indexes = collect_array_indexes(copied_cfg)
     resolve_array_indexes(copied_cfg)
-    make_graph_indexes(copied_cfg)
-    new_syms1 = handle_whole_arrays(copied_cfg, array_indexes)
-    new_syms2 = handle_array_indexes(copied_cfg, array_indexes)
-    add_syms_to_udg(copied_cfg, new_syms1)
-    add_syms_to_udg(copied_cfg, new_syms2)
+    handle_arrays(copied_cfg, array_indexes)
+    #make_graph_indexes(copied_cfg)
+    #new_syms1 = handle_whole_arrays(copied_cfg, array_indexes)
+    #new_syms2 = handle_array_indexes(copied_cfg, array_indexes)
+    #add_syms_to_udg(copied_cfg, new_syms1)
+    #add_syms_to_udg(copied_cfg, new_syms2)
     udg_to_datalog(copied_cfg)
     write_datalog_sinks_and_sources()
 

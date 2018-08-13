@@ -7,6 +7,7 @@
 .decl tainted(stmt:number)
 .decl tainted_sink(stmt:number)
 .decl nokill(stmt:number)
+.decl datadep(def_stmt:number, use_stmt:number, var:number)
 .decl gold_tainted_sink(stmt:number)
 .decl safe_sink(stmt:number)
 .decl unreachable_tainted_sink(stmt:number)
@@ -44,9 +45,13 @@ livedef(def_stmt, var, def_stmt) :- tainted(def_stmt), def(def_stmt, var).
 // get tainted sinks
 tainted_sink(this_stmt) :- sink(this_stmt), tainted(this_stmt).
 
+datadep(def_stmt, use_stmt, var) :- livedef(def_stmt, var, use_stmt), use(use_stmt, var).
+
 // debugging
 unreachable_tainted_sink(stmt) :- !tainted_sink(stmt), gold_tainted_sink(stmt).
 reachable_safe_sink(stmt) :- tainted_sink(stmt), safe_sink(stmt).
 
 .output unreachable_tainted_sink
 .output reachable_safe_sink
+.output datadep
+.output livedef

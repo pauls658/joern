@@ -126,8 +126,8 @@ def copied_cfg():
     fd.write("id,def,use,orig_id\n")
     for new, orig in id_map.iteritems():
         fd.write("%d,%s,%s,%d\n" % (new,
-            ";".join(defs[new]),
-            ";".join(uses[new]),
+            ";".join(map(lambda vi: var_map[int(vi)], defs[new])),
+            ";".join(map(lambda vi: var_map[int(vi)], uses[new])),
             orig))
     fd.close()
 
