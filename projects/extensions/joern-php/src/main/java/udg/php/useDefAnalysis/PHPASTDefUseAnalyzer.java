@@ -3,6 +3,7 @@ package udg.php.useDefAnalysis;
 import java.util.*;
 
 import ast.expressions.*;
+import udg.ASTNodeASTProvider;
 import udg.ASTProvider;
 import udg.php.useDefAnalysis.environments.ArrayIndexingEnvironment;
 import udg.php.useDefAnalysis.environments.AssignmentEnvironment;
@@ -46,10 +47,17 @@ public class PHPASTDefUseAnalyzer
 
 	// Determines whether we want to analyze a predicate or a normal statement
 	private boolean analyzingPredicate = false;
+
+	// Func arg handling
 	private HashSet<String> nonDefingFunctions;
 	private Stack<Long> argListStack;
+
+	// Array handling
 	public int dimDepth;
 	public int maxDimDepth;
+
+	public int propDepth;
+	public int maxPropDepth;
 
 	// The order in which function calls are executed for this basic block
 	private ArrayList<Long> callOrder;
@@ -108,8 +116,11 @@ public class PHPASTDefUseAnalyzer
 
 	protected void traverseAST(ASTProvider astProvider)
 	{
+		if (((ASTNodeASTProvider)astProvider).getASTNode().getNodeId() == 320)
+			System.out.print("");
 		UseDefEnvironment env = createUseDefEnvironment(astProvider);
 		env.setASTProvider(astProvider);
+
 
 		int numChildren = astProvider.getChildCount();
 

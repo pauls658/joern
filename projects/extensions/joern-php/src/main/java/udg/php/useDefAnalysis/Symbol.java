@@ -10,6 +10,7 @@ public class Symbol {
 
     public static String indexPrefix = "cid";
     public static String unknownIndex = indexPrefix + "_unknown";
+    public static String fieldPrefix = "field_prefix";
 
     public String name; // the symbol's name
     public String origName; // The symbol's unprefixed original name
@@ -21,6 +22,8 @@ public class Symbol {
     public boolean isIndexVar = false; // is the index statically unknown?
     public String origIndex = null;
     public String index = null;
+
+    public boolean isField = false;
 
     public boolean star = false; // Is an assignment to this symbol and assignment to every array/field
                          // of the symbol? I.e. should we not kill previous definitions of this
@@ -51,8 +54,6 @@ public class Symbol {
         this.origIndex = i;
     }
 
-    public boolean isField;
-
     public Symbol(String name) {
         this.origName = name;
         this.name = name;
@@ -68,6 +69,7 @@ public class Symbol {
         ret.index = this.index;
         ret.star = this.star;
         ret.arrayType = this.arrayType;
+        ret.isField = this.isField;
         return ret;
     }
 
@@ -83,6 +85,7 @@ public class Symbol {
                 other.origIndex == this.origIndex &&
                 other.index == this.index &&
                 other.arrayType == this.arrayType &&
-                other.star == this.star;
+                other.star == this.star &&
+                other.isField == this.isField;
     }
 }

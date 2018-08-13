@@ -61,7 +61,7 @@ class PHPCFGToUDGConverter extends CFGToUDGConverter {
         Collection<CFGNode> statements = cfg.getVertices();
 
         for (CFGNode cfgNode : statements)
-        {   
+        {
             // skip empty blocks
             if (cfgNode instanceof ASTNodeContainer)
             {
@@ -71,7 +71,10 @@ class PHPCFGToUDGConverter extends CFGToUDGConverter {
                 provider.setNode(statementNode);
 				this.phpAnalyzer.BBInit();
                 Collection<UseOrDef> usesAndDefs = this.phpAnalyzer.analyzeAST(provider);
+                usesAndDefs.removeIf(uod -> superglobals.contains(uod.symbol.origName));
 				this.phpAnalyzer.BBFinish();
+
+				if (usesAndDefs.size() == 0) continue;
 
 				String nodeType = statementNode.getProperty("type");
 				if (nodeType instanceof String && 
@@ -100,6 +103,10 @@ class PHPCFGToUDGConverter extends CFGToUDGConverter {
 		return useDefGraph;
     }
 
+	public HashMap getConstantMap() {
+		return constantMap;
+	}
+
 	private String translateLiteral(String index) {
 	    Long constId = constantMap.get(index);
 	    if (constId == null) {
@@ -108,10 +115,6 @@ class PHPCFGToUDGConverter extends CFGToUDGConverter {
 	    	constantMap.put(index, constId);
 		}
 		return Long.toString(constId);
-	}
-
-	public HashMap getConstantMap() {
-		return constantMap;
 	}
 
     /*
@@ -134,18 +137,23 @@ class PHPCFGToUDGConverter extends CFGToUDGConverter {
 	}
 
 	// Determines which variables are non-global, and therefore should be rewritten. Also
-	// builds the local
+	// find the local function symbols
 	public void makeSymbolsGlobal(PHPUseDefGraph useDefGraph, String prefix) {
 	    for (Map.Entry<Long, LinkedList<UseOrDef>> e : useDefGraph.getDefUseMap().entrySet()) {
 			for (UseOrDef uod : e.getValue()) {
-				if (!useDefGraph.isGlobalSymbol(uod.symbol.origName) && !superglobals.contains(uod.symbol.origName)) {
+				if (!useDefGraph.isGlobalSymbol(uod.symbol.origName) &&
+						!superglobals.contains(uod.symbol.origName) &&
+						!uod.symbol.isField) { // fields are globals too
 				    String newName = addGlobalPrefix(prefix, uod.symbol.name);
 				    if (!useDefGraph.isParamRef(uod.symbol.origName))
 				        useDefGraph.addLocalSymbol(newName);
 					uod.symbol.name = newName;
+					
 				}
 
-				// Check if symbol has a variable index, and rewrite if necessary
+				// Check if symbol has a variable index, and rewrite if necessary.
+				// Index symbol is either a variable, constant or unknown. No need
+				// to check if its a field.
 				if (uod.symbol.isArray &&
 					uod.symbol.isIndexVar &&
 					!useDefGraph.isGlobalSymbol(uod.symbol.origIndex) &&
@@ -154,6 +162,23 @@ class PHPCFGToUDGConverter extends CFGToUDGConverter {
 					if (!useDefGraph.isParamRef(uod.symbol.origIndex))
 					    useDefGraph.addLocalSymbol(newName);
 				    uod.symbol.index = newName;
+				}
+
+				// combine name and index to kill the array symbol if the array name is not global
+				if (uod.symbol.isArray &&
+					!useDefGraph.isGlobalSymbol(uod.symbol.origName) &&
+					!superglobals.contains(uod.symbol.origName) &&
+					!uod.symbol.isField) { // special field array symbols are global too
+					if (uod.symbol.arrayType == Symbol.ARRAY_VAR_INDEX ||
+						uod.symbol.arrayType == Symbol.ARRAY_UNKNOWN_INDEX) {
+						// Unknown index. We have already translated the name (because it's not
+						// global) and the unknown index does not need to be translated
+						useDefGraph.addLocalSymbol(uod.symbol.name + "[" + Symbol.unknownIndex);
+					} else {
+						// Constant index. We have already translated both the name (because it's
+						// not global) and the index (because we do it immediately)
+						useDefGraph.addLocalSymbol(uod.symbol.name + "[" + uod.symbol.index);
+					}
 				}
 			}
 		}

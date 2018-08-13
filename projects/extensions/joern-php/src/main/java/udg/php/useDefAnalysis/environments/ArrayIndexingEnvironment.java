@@ -20,9 +20,7 @@ public class ArrayIndexingEnvironment extends UseDefEnvironment
 	private boolean emitUse = false;
 
 	private boolean wasBottomDim = false;
-	
-	// pass the 'code' of the array upstream (i.e., the array's name)
-	// by recursion, this is already contained in the symbols field
+
 	@Override
 	public LinkedList<Symbol> upstreamSymbols()
 	{	
@@ -35,18 +33,21 @@ public class ArrayIndexingEnvironment extends UseDefEnvironment
 		}
 		return wasBottomDim;
 	}
-	
+
 	public void addChildSymbols( LinkedList<Symbol> childSymbols, ASTProvider child)
 	{
-		if (((ASTNodeASTProvider)this.astProvider).getASTNode().getNodeId() == 138556)
-			System.out.print("");
-		if (this.isBottomDim()) {
+		//if (((ASTNodeASTProvider)this.astProvider).getASTNode().getNodeId() == 138556)
+		//	System.out.print("");
+        if (child.getChildNumber() == 0 && !child.getTypeAsString().equals("ArrayIndexing"))
+        	wasBottomDim = true;
+
+		if (wasBottomDim) {
 			// this is the bottom most array dimension,
 			// need to add extra info to the array name
 			if (child.getChildNumber() == 0) {
 				assert childSymbols.size() == 1;
 				// Save the array symbol til we know more about the index
-				this.arraySymbol = childSymbols.get(0);
+				this.arraySymbol = childSymbols.getFirst();
 				this.arraySymbol.isArray = true;
 				if (ourDepth > 1) {
 					// The dimension is > 1, so we can't kill previous defs
@@ -124,7 +125,7 @@ public class ArrayIndexingEnvironment extends UseDefEnvironment
 
 	@Override
 	public void preTraverse(PHPASTDefUseAnalyzer analyzer) {
-		this.phpAnalyzer = (PHPASTDefUseAnalyzer)analyzer;
+		this.phpAnalyzer = analyzer;
 		this.phpAnalyzer.dimDepth++;
 		this.ourDepth = phpAnalyzer.dimDepth;
 		this.phpAnalyzer.maxDimDepth++;
