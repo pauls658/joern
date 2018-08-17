@@ -14,13 +14,12 @@ public class AssignmentEnvironment extends UseDefEnvironment
 	
 	public void addChildSymbols( LinkedList<Symbol> childSymbols, ASTProvider child)
 	{
-		this.symbols.addAll( childSymbols);
-		// additionally collect defs and uses symbols in separate lists,
-		// to be used for useOrDefsFromSymbols
 		if( isDef( child))
 			defSymbols.addAll( childSymbols);
-		if( isUse( child))
-			useSymbols.addAll( childSymbols);
+		if( isUse( child)) {
+			this.symbols.addAll(childSymbols);
+			useSymbols.addAll(childSymbols);
+		}
 	}
 
 	public Collection<UseOrDef> useOrDefsFromSymbols(ASTProvider child)

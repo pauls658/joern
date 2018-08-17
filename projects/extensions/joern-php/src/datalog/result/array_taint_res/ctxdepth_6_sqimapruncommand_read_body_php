@@ -1,0 +1,26 @@
+140851 - mime_fetch_body error
+152590 - displayHtmlHeader 33 , browser_rendering_mode, should look into this
+152622 - displayHtmlHeader 49 , sqm_baseuri, should look into this
+152674 - displayHtmlHeader 62 , either base_uri or custom_css
+152709 - displayHtmlHeader 76 , either title or xtra
+152811 - displayInternalLink 106, makeInternalLink res is tainted
+153492 - displayPageHeader 280, color is tainted,  going to look into this one now
+	- gettext_php_loaded_language is also tainted, which should never happen
+153549 
+153568
+153592
+153647
+153739
+167848
+168148
+26291
+27445
+27650
+27672
+28562
+28572
+28654
+28693
+28777
+
+- Note - a lot of live defs are the actual returns

@@ -58,7 +58,7 @@ def remove_node(g, n):
 def preprocesses_graph(g):
     orig_node_count = g.order()
     for n, d in g.nodes(data=True):
-        if "uses" not in d and "defs" not in d:
+        if "uses" not in d and "defs" not in d and n != 1: # don't delete CFG exit
             remove_node(g, n)
 
     print "Reduced graph to %0.2f%% original size" % ((float(g.order())/float(orig_node_count))*100)
@@ -69,6 +69,7 @@ class Symbol(object):
     ARRAY_UNKNOWN_INDEX = 2
 
     unknown_index = "cid_unknown"
+    field_prefix = "field_prefix"
 
     var_ids = {}
     var_idc = 0
@@ -80,6 +81,8 @@ class Symbol(object):
         if enc.endswith("*"):
             self.star = True
             enc = enc[:-1]
+
+        self.isField = enc.startswith(Symbol.field_prefix)
 
         # handle array stuff
         pieces = enc.split("[")
@@ -192,10 +195,14 @@ def write_datalog_edge(start, end):
     datalog_edge_fd.write("%d\t%d\n" % (start, end))
 
 def write_datalog_def(stmt_id, sym):
-    global datalog_def_fd
+    global datalog_def_fd, g, array_indexes
     datalog_def_fd.write("%d\t%s\n" % (stmt_id, sym.final_enc()))
     if sym.star or sym.is_unknown_index():
         write_datalog_star(stmt_id, sym)
+
+def write_datalog_kill(stmt_id, sym):
+    global datalog_kill_fd
+    datalog_kill_fd.write("%d\t%s\n" % (stmt_id, sym.final_enc()))
 
 def write_datalog_star(stmt_id, sym):
     global datalog_star_fd
@@ -454,14 +461,17 @@ def write_func_depths():
     fd.close()
 
 
-def udg_to_datalog(g):
-    for n in g.nodes():
-        for s in g.adj[n]:
+def udg_to_datalog(udg):
+    global g, id_map
+    for n in udg.nodes():
+        for s in udg.adj[n]:
             write_datalog_edge(n, s)
-        for d in g.nodes[n].get("defs", []):
+        for d in udg.nodes[n].get("defs", []):
             write_datalog_def(n, d)
-        for u in g.nodes[n].get("uses", []):
+        for u in udg.nodes[n].get("uses", []):
             write_datalog_use(n, u)
+        for k in udg.nodes[n].get("kills", []):
+            write_datalog_kill(n, k)
 
 idc = 0
 # copied id -> orig id
@@ -477,6 +487,7 @@ def open_output_files():
 	global datalog_tainted_sink_fd
 	global datalog_star_fd
 	global datalog_nokill_fd
+	global datalog_kill_fd
 
 	datalog_fd = open("tmp/facts", "w+")
 	datalog_edge_fd = open("tmp/edge.csv", "w+")
@@ -488,6 +499,7 @@ def open_output_files():
 	datalog_tainted_sink_fd = open("tmp/tainted_sink.csv", "w+")
 	datalog_star_fd = open("tmp/star_def.csv", "w+")
 	datalog_nokill_fd = open("tmp/nokill.csv", "w+")
+	datalog_kill_fd = open("tmp/kill.csv", "w+")
 
 g = None
 copied_funcs = 0
@@ -586,6 +598,12 @@ def handle_arrays(udg, array_indexes):
             if not d.isArray and d.name in array_indexes:
                 # whole symbol that is indexed elsewhere in the program
                 new_syms.add(Symbol(d.name + "[" + Symbol.unknown_index))
+                if not d.isField:
+                    # we can also kill previous livedefs
+                    if "kills" not in data: data["kills"] = set()
+                    data["kills"].add(Symbol(d.name + "[" + Symbol.unknown_index))
+                    for i in array_indexes[d.name]:
+                        data["kills"].add(Symbol(d.name + "[" + i))
             else:
                 # whole symbol that is never indexed -> no special
                 # handling, or a symbol with an index -> convert to
@@ -782,8 +800,24 @@ def resolve_array_indexes(udg):
             data["uses"].clear()
             data["uses"].update(new_syms)
 
+def add_kills(udg, array_indexes):
+    global g, id_map
+    for n, data in udg.nodes(data=True):
+        if "kills" not in data:
+            data["kills"] = set()
+        if g.nodes[id_map[n]]["type"] == "CFG_FUNC_EXIT":
+            for d in data.get("defs", []):
+                data["kills"].add(Symbol(d.enc))
+#        else:
+#            for d in data.get("defs", []):
+#                if not d.isArray and not d.isField and d.name in array_indexes:
+#                    # kill all the array indexes
+#                    data["kills"].add(Symbol(d.name + "[" + Symbol.unknown_index))
+#                    for i in array_indexes[d.name]:
+#                        data["kills"].add(Symbol(d.name + "[" + i))
+
+
 def arrays(args):
-    global datalog_fd
     global g
     file_name = args[0]
     open_output_files()
@@ -794,7 +828,7 @@ def arrays(args):
     g = graph_from_json()
     entry = sqmail_entries(g, file_name)[0][0]
     calc_func_depths(g, entry)
-    depth = 6
+    depth = 8
     print "write_bounded_copied_cfg to depth %d" % (depth)
     copied_cfg = nx.MultiDiGraph()
     make_copied_cfg(g, entry, depth, copied_cfg)
@@ -805,6 +839,7 @@ def arrays(args):
     array_indexes = collect_array_indexes(copied_cfg)
     resolve_array_indexes(copied_cfg)
     handle_arrays(copied_cfg, array_indexes)
+    add_kills(copied_cfg, array_indexes)
     #make_graph_indexes(copied_cfg)
     #new_syms1 = handle_whole_arrays(copied_cfg, array_indexes)
     #new_syms2 = handle_array_indexes(copied_cfg, array_indexes)
@@ -814,7 +849,7 @@ def arrays(args):
     write_datalog_sinks_and_sources()
 
     save_maps()
-    #write_handleable_info()
+    write_handleable_info()
 
     datalog_fd.close()
 

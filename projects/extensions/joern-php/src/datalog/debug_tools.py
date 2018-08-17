@@ -1,20 +1,20 @@
 import json, sys
 from collections import defaultdict
+from common import *
 
 def load_sinks():
     echos = set()
     echos.update(json.load(open("tmp/sinks.json", "rb"))["results"][0]["data"][0]["row"][0])
     return echos
 
-def load_id_map():
-    fd = open("tmp/id_map.csv", "r")
-    id_map = {}
-    reverse_id_map = defaultdict(list)
+def load_kills():
+    fd = open("tmp/kill.csv", "r")
+    kills = defaultdict(list)
     for line in fd:
-        new, orig = map(int, line.strip().split(","))
-        id_map[new] = orig
-        reverse_id_map[orig].append(new)
-    return id_map, reverse_id_map
+        n, var = map(int, line.strip().split())
+        kills[n].append(var)
+    fd.close()
+    return kills
 
 def load_defs():
     fd = open("tmp/def.csv", "r")
@@ -36,16 +36,6 @@ def load_uses():
     fd.close()
     return uses
 
-def load_var_map():
-    fd = open("tmp/var_map.csv", "r")
-    var_map = {}
-    rev_var_map = {}
-    for line in fd:
-        i, var_name = line.split(",")
-        i = int(i)
-        var_map[i] = var_name.strip()
-        rev_var_map[var_name] = i
-    return var_map, rev_var_map
 
 def load_data_deps():
     fd = open("datadep.csv", "r")
@@ -68,13 +58,6 @@ def load_livedefs(stmt):
     return ret
 """
 
-def load_souffle_res():
-    s = set()
-    fd = open("tainted_sink.csv", "r")
-    for line in fd:
-        s.add(int(line.strip()))
-    return s
-
 def unique_echos():
     id_map, _ = load_id_map()
     mapped_echos = set(map(lambda x: id_map[x], load_souffle_res()))
@@ -82,7 +65,7 @@ def unique_echos():
     if mapped_echos - echos:
         print "Something is wonky"
     else:
-        print mapped_echos
+        print "\n".join(map(str, mapped_echos))
 
 def livevars_for_stmt(args):
     id_map, reverse_id_map = load_id_map()
@@ -122,12 +105,14 @@ def copied_cfg():
     var_map, rev_var_map = load_var_map()
     defs = load_defs()
     uses = load_uses()
+    kills = load_kills()
     fd = open("nodes.csv", "w+")
-    fd.write("id,def,use,orig_id\n")
+    fd.write("id,def,use,kill,orig_id\n")
     for new, orig in id_map.iteritems():
-        fd.write("%d,%s,%s,%d\n" % (new,
+        fd.write("%d,%s,%s,%s,%d\n" % (new,
             ";".join(map(lambda vi: var_map[int(vi)], defs[new])),
             ";".join(map(lambda vi: var_map[int(vi)], uses[new])),
+            ";".join(map(lambda vi: var_map[int(vi)], kills[new])),
             orig))
     fd.close()
 

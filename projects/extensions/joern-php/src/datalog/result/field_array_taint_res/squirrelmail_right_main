@@ -1,0 +1,46 @@
+177064:
+	244314: 129213_ret
+	282827: 176024_local_from_xtra
+	282837: msg[cid_unknown
+
+180105:
+	283505: 180067_local_paginator_str
+	283511: 180067_local_msg_cnt_str
+
+159402:
+	243543: 132539_ret
+
+153549:
+	153549: 152823_local_shortBoxName
+
+177587:
+	130549: 130482_local_bytes
+
+168148:
+	243745: 132539_ret
+	139300: 139230_local_ret // slightly modified this one
+	243718: 132539_ret
+	243809: 132539_ret
+	243724: 132539_ret
+	243731: 132539_ret
+	243738: 132539_ret
+
+178677:
+	244364: 132539_ret
+
+177014:
+	282823: msg[cid_unknown
+
+179639:
+	283313: 179510_local_msg_cnt_str
+	283307: 179510_local_paginator
+
+182620:
+	127041: 126732_local_mbox_options // bad instr
+
+177373:
+	177359: td_str,176024_local_subject // bad instr
+
+177182:
+	177158: msg[cid_unknown
+

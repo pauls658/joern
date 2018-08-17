@@ -41,10 +41,12 @@ public class FunctionCallEnvironment extends EmitDefAndUseEnvironment
 	public void addChildSymbols(LinkedList<Symbol> childSymbols,
 			ASTProvider child)
 	{
-		if (isDef(child))
-			defSymbols.addAll(childSymbols);
-		if (isUse(child))
-			useSymbols.addAll(childSymbols);
+	    if (this.type.equals("AST_METHOD_CALL") && child.getChildNumber() == 0 && childSymbols.size() == 1) {
+	        Symbol s = childSymbols.getFirst();
+	        s.isArg = true;
+	        s.argId = ((ASTNodeASTProvider)child).getASTNode().getNodeId();
+	    	useSymbols.addAll(childSymbols);
+		}
 	}
 
 	@Override

@@ -7,6 +7,7 @@
 .decl tainted(stmt:number)
 .decl tainted_sink(stmt:number)
 .decl nokill(stmt:number)
+.decl kill(stmt:number, var:number)
 .decl datadep(def_stmt:number, use_stmt:number, var:number)
 
 .input edge(IO=file, filename="tmp/edge.csv")
@@ -16,6 +17,7 @@
 .input source(IO=file, filename="tmp/source.csv")
 .input sink(IO=file, filename="tmp/sink.csv")
 .input nokill(IO=file, filename="tmp/nokill.csv")
+.input kill(IO=file, filename="tmp/kill.csv")
 
 .decl livedef(var:number, def_stmt:number, this_stmt:number)
 
@@ -26,10 +28,13 @@ livedef(def_stmt, var, def_stmt) :- def(def_stmt, var), source(def_stmt).
 livedef(prev_stmt, var, this_stmt) :- livedef(prev_stmt, var, prev_stmt), edge(prev_stmt, this_stmt).
 
 // propogate liveness until we reach an assignment
-livedef(def_stmt, var, this_stmt) :- livedef(def_stmt, var, prev_stmt), edge(prev_stmt, this_stmt), !def(prev_stmt, var).
+// if there is no def of the var at this statement, we always let the def pass
+livedef(def_stmt, var, this_stmt) :- livedef(def_stmt, var, prev_stmt), edge(prev_stmt, this_stmt), !def(prev_stmt, var), !kill(prev_stmt, var).
+// or, if there is a def, but this is a special non-killing statement (e.g. recursive call), let the def pass
 livedef(def_stmt, var, this_stmt) :- livedef(def_stmt, var, prev_stmt), edge(prev_stmt, this_stmt), nokill(prev_stmt).
-// TODO: kill star_defs at func exits if we can
-livedef(def_stmt, var, this_stmt) :- livedef(def_stmt, var, prev_stmt), edge(prev_stmt, this_stmt), star_def(def_stmt, var).
+// or if there is a def, but the live def is a star def, and this is not a killing statement (e.g. a CFG func exit), then
+// let the def pass
+livedef(def_stmt, var, this_stmt) :- livedef(def_stmt, var, prev_stmt), edge(prev_stmt, this_stmt), star_def(def_stmt, var), !kill(prev_stmt, var).
 
 // statements that use a live def are tainted
 tainted(this_stmt) :- livedef(def_stmt, var, this_stmt), use(this_stmt, var).
