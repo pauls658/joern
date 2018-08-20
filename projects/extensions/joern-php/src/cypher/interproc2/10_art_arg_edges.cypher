@@ -31,6 +31,7 @@ create // it looks backwards, but i promise its not
 
 // finally attach the first child to the ret
 // 0 -> ret
+// We don't make artificial "this" exit arg, so it is always 0 -> ret
 match
 (a:FUNCCALL)<-[:ASSOC]-(ret{type:"return"}),
 (a)<-[:CALL_ID]-(arg_exit{type:"arg_exit", childnum:0})
@@ -59,12 +60,13 @@ inc.delete = true;
 match
 (bb:BB)-[:PARENT_OF*0..]->(call:FUNCCALL{last_call:true})<-[:ASSOC]-(ret:ART_AST{type:"return"})
 where
-ID(bb) = call.bb_id // make sure we don't match the parent in a nested blocks (e.g. a loop)
+ID(bb) = call.bb_id // make sure we don't match the parent in a nested block (e.g. a loop)
 create 
 (ret)-[:FLOWS_TO{new_edge:true}]->(bb);
 
 
 // do the middle calls
+// we don't rely on child nums, so artif "this" arg won't affect us
 match
 (prev_call:FUNCCALL)<-[:ASSOC]-(prev_ret:ART_AST{type:"return"}),
 (prev_call)-[:NEXT_CALL]->(call),
@@ -85,7 +87,7 @@ single(n in nodes(p) where n:FUNCCALL)
 create 
 (ret)-[:RET_DEF]->(bb);
 
-
+// then do nested calls
 match 
 
 p=(top:FUNCCALL)-[:PARENT_OF]->(alist:AST{type:"AST_ARG_LIST"})-[:PARENT_OF]->(arg:AST)-[:PARENT_OF*0..]->(call:FUNCCALL),

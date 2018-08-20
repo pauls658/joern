@@ -31,7 +31,8 @@ class G {
     def canHandleArtAST(Neo4jVertex v) {
     	switch (v.value('type')) {
 			case "return":
-				return true;
+				def c = g.V(v.id()).out("ASSOC").next();
+				return functionCall(c);
 			default:
 				def c = g.V(v.id()).out("CALL_ID").next();
 				return functionCall(c);
@@ -44,18 +45,17 @@ class G {
     		case "AST_STATIC_CALL":
     		case "AST_NEW":
 			case "AST_METHOD_CALL":
-    			return functionCall(v);
+    			return [functionCall(v), false];
     
     		case "AST_BINARY_OP":
-    			return binaryOp(v);
+    			return [binaryOp(v), false];
     
     		case "AST_ASSIGN_OP":
-    			return assignOp(v);
+    			return [assignOp(v), false];
     
     		case "AST_ASSIGN":
     		case "AST_DIM":
     		case "AST_ASSIGN_REF":
-    		case "AST_ECHO":
     		case "AST_FOREACH":
     		case "AST_FOR":
     		case "AST_DO_WHILE":
@@ -72,9 +72,11 @@ class G {
     		case "AST_NAME":
     		case "NULL":
     		case "string":
-				return true;
+				return [true, false];
+    		case "AST_ECHO":
+				return [true, false];
     		default:
-    			return false;
+    			return [false, false];
     	}
     }
    
@@ -115,10 +117,13 @@ class G {
 		def var_paths = getVarPaths(BB.id());
 		for (path in var_paths) {
 			for (v in path) {
-				if (!canHandleAST(v)) {
+				def stop, handleable;
+				(handleable, stop) = canHandleAST(v);
+				if (!handleable) {
 					//println "Could not handle type: " + v.value("type")
 					return false;
 				}
+				if (stop) break;
 			}
 		}
 		return true;

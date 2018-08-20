@@ -41,7 +41,11 @@ set aentry.defs = param.defs
 set aexit.uses = param.defs 
 set aexit.flags = coalesce(param.flags, ["PARAM_VAL"]);
 
-
+// "this" arg
+match
+(aentry:ART_AST{type:"arg_entry",childnum:-1})-[:CALL_ID]->(call),
+(call)-[:CALLS]->(decl:FUNCDECL)-[:PARENT_OF]->(:AST{type:"AST_PARAM_LIST"})-[:PARENT_OF]->(param:AST{type:"AST_PARAM",childnum:-1})
+set aentry.defs = param.defs;
 
 // remove AST global defs
 match

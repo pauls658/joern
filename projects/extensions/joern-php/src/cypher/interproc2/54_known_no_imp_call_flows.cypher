@@ -104,7 +104,7 @@ match
 (aentry:ART_AST{type:"arg_entry"})-[:CALL_ID]->(call:FUNCCALL)<-[:CALL_ID|ASSOC]-(aexit:ART_AST)
 where 
 exists(call.name) and
-call.name in ["strrchr", "end", "escapeshellcmd", "dechex", "strrev", "chunk_split", "uniqid", "mb_convert_kana", "mb_strimwidth", "mb_decode_mimeheader", "mb_strcut", "decbin", "ceil", "floor", "round", "strtotime", "array_reverse", "parse_url", "base_convert", "ucfirst", "getenv", "htmlspecialchars", "mb_substr", "print_r", "base64_decode", "base64_encode", "abs", "intval", "realpath", "htmlentities", "array_filter", "md5", "gethostbyname", "strchr", "strstr", "arsort", "asort", "ksort", "addslashes", "addcslashes", "preg_quote", "str_repeat", "stristr", "nl2br", "array_slice", "array_values", "array_keys", "mb_convert_encoding", "substr", "chop", "rtrim", "trim", "strip_tags", "unserialize"] and
+call.name in ["strrchr", "end", "escapeshellcmd", "dechex", "strrev", "chunk_split", "uniqid", "mb_convert_kana", "mb_strimwidth", "mb_decode_mimeheader", "mb_strcut", "decbin", "ceil", "floor", "round", "strtotime", "array_reverse", "parse_url", "base_convert", "ucfirst", "getenv", "htmlspecialchars", "mb_substr", "print_r", "base64_decode", "base64_encode", "abs", "intval", "realpath", "htmlentities", "array_filter", "md5", "gethostbyname", "strchr", "strstr", "arsort", "asort", "ksort", "addslashes", "addcslashes", "preg_quote", "str_repeat", "stristr", "nl2br", "array_slice", "array_values", "array_keys", "mb_convert_encoding", "substr", "chop", "rtrim", "trim", "strip_tags", "unserialize", "serialize"] and
 not (call)-[:CALLS]->() and
 ((aexit.type = "arg_exit" and aentry.childnum = aexit.childnum) or 
  (aexit.type = "return" and aentry.childnum = 0))
