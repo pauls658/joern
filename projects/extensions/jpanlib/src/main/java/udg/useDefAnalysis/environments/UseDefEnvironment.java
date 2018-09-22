@@ -16,8 +16,8 @@ import udg.useDefAnalysis.ASTDefUseAnalyzer;
  */
 public class UseDefEnvironment
 {
-
-	protected ASTProvider astProvider;
+	// Has the AST node associated with this environment (not the top-level BB node)
+	protected ASTProvider astProvider; 
 	protected LinkedList<String> symbols = new LinkedList<String>();
 
 	public static final LinkedList<UseOrDef> emptyUseOrDef = new LinkedList<UseOrDef>();

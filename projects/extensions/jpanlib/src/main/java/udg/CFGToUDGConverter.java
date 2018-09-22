@@ -22,9 +22,9 @@ public class CFGToUDGConverter
 			throw new RuntimeException("Trying to call CFGToUDGConverter.convert(CFG)"
 					+ " without calling CFGToUDGConverter.setLanguage(String) first.");
 
-		// Incrementally create a UseDefGraph by generating
+		// Incrementally create a useDefGraph by generating
 		// UseOrDefs for each statement separately and adding those
-		// to the UseDefGraph
+		// to the useDefGraph
 
 		UseDefGraph useDefGraph = new UseDefGraph();
 
@@ -48,6 +48,9 @@ public class CFGToUDGConverter
 		return useDefGraph;
 	}
 
+	// After finishing a block, this function is called on the
+	// list of generated defs/uses with the top-level statement
+	// node and the useDefGraph
 	protected void addToUseDefGraph(UseDefGraph useDefGraph,
 			Collection<UseOrDef> usesAndDefs, ASTNode statementNode)
 	{
@@ -59,7 +62,7 @@ public class CFGToUDGConverter
 
 			ASTNodeASTProvider astProvider = (ASTNodeASTProvider) useOrDef.astProvider;
 			// CHECK?
-			ASTNode useOrDefNode = astProvider.getASTNode();
+			ASTNode useOrDefNode = astProvider.getASTNode(); // the node that reported the def/use
 
 			if (useOrDef.isDef)
 			{

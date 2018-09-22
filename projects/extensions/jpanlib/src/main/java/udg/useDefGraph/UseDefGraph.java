@@ -9,7 +9,7 @@ import misc.MultiHashMap;
 public class UseDefGraph
 {
 
-	// A UseDefGraph is a table indexed
+	// A useDefGraph is a table indexed
 	// by identifiers. Each table-entry
 	// is a list of the UseOrDefRecords
 	// of the identifier.

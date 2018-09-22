@@ -46,10 +46,6 @@ public abstract class ASTDefUseAnalyzer
 	 */
 	protected void traverseAST(ASTProvider astProvider)
 	{
-		if (astProvider instanceof ASTNodeASTProvider)
-			if (((ASTNodeASTProvider)astProvider).getASTNode().getNodeId() == 740)
-				System.out.println("");
-
 		UseDefEnvironment env = createUseDefEnvironment(astProvider);
 		env.setASTProvider(astProvider);
 
@@ -83,7 +79,7 @@ public abstract class ASTDefUseAnalyzer
 	 * parent-environment by calling addChildSymbols on the parent. Asks
 	 * parent-environment to generate useOrDefs and emit them.
 	 */
-	private void reportUpstream(UseDefEnvironment env)
+	protected void reportUpstream(UseDefEnvironment env)
 	{
 		LinkedList<String> symbols = env.upstreamSymbols();
 		ASTProvider astProvider = env.getASTProvider();

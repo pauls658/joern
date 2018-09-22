@@ -19,6 +19,10 @@ public class UseOrDefRecord
 		return astNode;
 	}
 
+	public Long getStatementNodeId() {
+		return astNode.getNodeId();
+	}
+
 	public void setAstNode(ASTNode astNode)
 	{
 		this.astNode = astNode;

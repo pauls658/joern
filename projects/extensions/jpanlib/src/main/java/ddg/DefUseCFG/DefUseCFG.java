@@ -10,7 +10,7 @@ import misc.MultiHashMap;
 
 /**
  * A CFG decorated with USE and DEFs suitable to determine reaching definitions.
- * This contains the same information as a UseDefGraph (UDG) but in a format
+ * This contains the same information as a useDefGraph (UDG) but in a format
  * better suited for DDG creation.
  */
 
