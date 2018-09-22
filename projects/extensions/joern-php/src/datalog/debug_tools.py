@@ -65,7 +65,7 @@ def unique_echos():
     if mapped_echos - echos:
         print "Something is wonky"
     else:
-        print "\n".join(map(str, mapped_echos))
+        print "\n".join(map(str, sorted(mapped_echos)))
 
 def livevars_for_stmt(args):
     id_map, reverse_id_map = load_id_map()

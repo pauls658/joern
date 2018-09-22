@@ -1,4 +1,4 @@
-import json, sys
+import json, sys, re
 import networkx as nx
 from collections import defaultdict
 
@@ -25,7 +25,7 @@ def graph_from_json():
 
     return g
 
-# not really used
+# used for dump_handleable()
 # dumps out the handleable info for translated node ids and
 # avoids overwriting previous analysis results
 def load_id_map():
@@ -188,7 +188,11 @@ def profile_memory():
     print('Maximum memory usage: %s' % max(mem_usage))
 
 def add_graph_edge(start, end, copied_cfg):
-    copied_cfg.add_edge(start, end)
+    global g, id_map
+    if g.nodes[id_map[start]]["type"] == "AST_EXIT":
+        copied_cfg.add_edge(start, 1) # 1 is always the CFG exit
+    else:
+        copied_cfg.add_edge(start, end)
 
 def write_datalog_edge(start, end):
     global datalog_edge_fd
@@ -208,9 +212,12 @@ def write_datalog_star(stmt_id, sym):
     global datalog_star_fd
     datalog_star_fd.write("%d\t%s\n" % (stmt_id, sym.final_enc()))
 
+#ret_re = re.compile("[0-9]*_actual_ret")
 def write_datalog_use(stmt_id, sym):
-    global datalog_use_fd
+    global datalog_use_fd, ret_re
     datalog_use_fd.write("%d\t%s\n" % (stmt_id, sym.final_enc()))
+    #if ret_re.match(sym.name):
+    #    write_datalog_kill(stmt_id, sym)
 
 def write_datalog_sink(i):
     global out_format
@@ -283,12 +290,12 @@ def get_argentries_for_callid(g, call_id):
             g.nodes(data=True))]
 
 func_depth = {}
-def calc_func_depths(g, func_entry, cur_depth=0):
+def calc_func_depths(g, func_entry, cur_depth=0, call_stack=set()):
     global func_depth
 
     if func_entry in func_depth:
         return (func_depth[func_entry] - 1) + cur_depth
-
+    call_stack.add(func_entry)
     func_exit = int(g.nodes[func_entry]["exit_id"])
     leaf_call = True
     max_call_depth = 0
@@ -312,7 +319,7 @@ def calc_func_depths(g, func_entry, cur_depth=0):
                 # regardless if this is a recursive call or not
                 work.append(arg_exit)
 
-                if s in visited:
+                if s in call_stack:
                     # recursion
                     pass
                 else:
@@ -329,13 +336,13 @@ def calc_func_depths(g, func_entry, cur_depth=0):
         max_call_depth = cur_depth
    
     func_depth[func_entry] = (max_call_depth - cur_depth) + 1
-
+    call_stack.remove(func_entry)
     return max_call_depth
 
 
 # func entry -> (entry, exit)
 last_created = {}
-def make_copied_cfg(g, func_entry, max_depth, copied_cfg):
+def make_copied_cfg(g, func_entry, max_depth, copied_cfg, call_stack={}):
     global idc, last_created, id_map, func_depth
 
     if func_depth[func_entry] >= max_depth and func_entry in last_created:
@@ -355,6 +362,8 @@ def make_copied_cfg(g, func_entry, max_depth, copied_cfg):
     idc += 1
     
     last_created[func_entry] = (id_translation[func_entry], id_translation[func_exit])
+    assert func_entry not in call_stack
+    call_stack[func_entry] = (id_translation[func_entry], id_translation[func_exit])
 
     work = [func_entry]
     while work:
@@ -372,11 +381,10 @@ def make_copied_cfg(g, func_entry, max_depth, copied_cfg):
                 id_map[idc] = arg_exit
                 idc += 1
 
-                if s in id_translation: 
+                if s in call_stack: 
                     # recursion
-                    assert s == func_entry
-                    add_graph_edge(id_translation[cur], id_translation[s], copied_cfg)
-                    add_graph_edge(id_translation[func_exit], id_translation[arg_exit], copied_cfg)
+                    add_graph_edge(id_translation[cur], call_stack[s][0], copied_cfg)
+                    add_graph_edge(call_stack[s][1], id_translation[arg_exit], copied_cfg)
                     # don't kill the param definitions of the parent
                     # call
                     write_datalog_nonkilling_args(g, g.nodes[cur]["call_id"], id_translation, copied_cfg)
@@ -403,6 +411,7 @@ def make_copied_cfg(g, func_entry, max_depth, copied_cfg):
                 # either case, do not continue
                 add_graph_edge(id_translation[cur], id_translation[s], copied_cfg)
 
+    call_stack.pop(func_entry)
     return id_translation[func_entry], id_translation[func_exit]
 
 def write_datalog_sinks_and_sources():
@@ -449,11 +458,12 @@ def get_all_toplevel_entrys(g):
 
     return map(lambda (n, d): n, starts)
 
-def write_func_depths():
+def write_func_depths(args):
     global func_depth
     fd = open("tmp/func_depths", "w+")
     g = graph_from_json()
-    entry = sqmail_entries(g)[0][0]
+    file_name = args[0]
+    entry = sqmail_entries(g, file_name)[0][0]
     calc_func_depths(g, entry)
 
     for eid, depth in func_depth.iteritems():
@@ -820,6 +830,8 @@ def add_kills(udg, array_indexes):
 def arrays(args):
     global g
     file_name = args[0]
+    depth = int(args[1])
+
     open_output_files()
     load_sinks()
     #load_testcase_sinks()
@@ -828,9 +840,9 @@ def arrays(args):
     g = graph_from_json()
     entry = sqmail_entries(g, file_name)[0][0]
     calc_func_depths(g, entry)
-    depth = 8
     print "write_bounded_copied_cfg to depth %d" % (depth)
     copied_cfg = nx.MultiDiGraph()
+    #import pdb; pdb.set_trace()
     make_copied_cfg(g, entry, depth, copied_cfg)
     with open("tmp/cfg_exit", "w+") as fd:
         fd.write(str(g.nodes[entry]["exit_id"]))
