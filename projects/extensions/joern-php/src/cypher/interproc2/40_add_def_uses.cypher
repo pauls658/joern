@@ -18,7 +18,7 @@ set
 arg.defs = coalesce(arg.defs + ";" + line.symbol, line.symbol);
 
 
-// general basic block def/uses
+// general basic block defs
 load csv with headers from "file:///home/brandon/joern/projects/extensions/joern-php/defuse_csv/BB_def.csv" as line
 match
 (a)
@@ -27,7 +27,7 @@ ID(a) = toInteger(line.id)
 set
 a.defs = coalesce(a.defs + ";" + line.symbol, line.symbol);
 
-// general basic block def/uses
+// general basic block uses
 load csv with headers from "file:///home/brandon/joern/projects/extensions/joern-php/defuse_csv/BB_use.csv" as line
 match
 (a)
@@ -36,5 +36,5 @@ ID(a) = toInteger(line.id)
 set
 a.uses = coalesce(a.uses + ";" + line.symbol, line.symbol);
 
-// TODO: can just delete all the def/uses from params
+// this is probably unecessary
 match (a:AST{type:"AST_PARAM"}) set a.uses = a.defs;
