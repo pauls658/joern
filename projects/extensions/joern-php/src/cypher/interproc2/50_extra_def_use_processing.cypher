@@ -16,7 +16,7 @@ set
 ret.actual_ret_name = toString(ret.call_id) + "_actual_ret";
 
 
-// create a use for the actual return (poorly indicated by "RET_DEF")
+// create a use for the actual return (indicated by "RET_DEF", which in hindsight was a bad choice of name)
 match
 (BB)<-[:RET_DEF]-(ret)
 set
@@ -37,15 +37,15 @@ match
 where
 aentry.childnum = aexit.childnum and 
 aentry.childnum = param.childnum 
-set aentry.defs = param.defs
-set aexit.uses = param.defs 
+set aentry.defs = coalesce(aentry.defs + ";" + param.defs, param.defs)
+set aexit.uses = coalesce(aexit.uses + ";" + param.defs, param.defs)
 set aexit.flags = coalesce(param.flags, ["PARAM_VAL"]);
 
 // "this" arg
 match
 (aentry:ART_AST{type:"arg_entry",childnum:-1})-[:CALL_ID]->(call),
 (call)-[:CALLS]->(decl:FUNCDECL)-[:PARENT_OF]->(:AST{type:"AST_PARAM_LIST"})-[:PARENT_OF]->(param:AST{type:"AST_PARAM",childnum:-1})
-set aentry.defs = param.defs;
+set aentry.defs = coalesce(aentry.defs + ";" + param.defs, param.defs);
 
 // remove AST global defs
 match

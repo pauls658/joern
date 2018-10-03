@@ -374,12 +374,16 @@ def make_copied_cfg(g, func_entry, max_depth, copied_cfg, call_stack={}):
             if e["label"] == "INTERPROC":
                 arg_exit = e["exit_id"]
 
-                assert e["type"] == "entry" and \
-                        arg_exit not in id_translation
+                assert e["type"] == "entry" # and \
+                        # arg_exit not in id_translation
+                        # We could have multiple interproc edges
+                        # so the second check is not valid
 
-                id_translation[arg_exit] = idc
-                id_map[idc] = arg_exit
-                idc += 1
+                # needs to be changed
+                if arg_exit not in id_translation:
+                    id_translation[arg_exit] = idc
+                    id_map[idc] = arg_exit
+                    idc += 1
 
                 if s in call_stack: 
                     # recursion

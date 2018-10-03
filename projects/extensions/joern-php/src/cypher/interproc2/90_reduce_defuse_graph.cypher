@@ -13,3 +13,8 @@ remove a.defs remove a.uses;
 match (a{type:"arg_exit"})
 where "PARAM_VAL" in a.flags
 remove a.defs remove a.uses;
+
+
+// label BB's that have concats
+match (a:BB)-[:PARENT_OF*..]->(c:AST{type:"AST_BINARY_OP"}) where "BINARY_CONCAT" in c.flags set a.has_concat = true;
+match (a:BB) where not exists(a.has_concat) set a.has_concat = false;

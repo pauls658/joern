@@ -234,14 +234,14 @@ public class PHPCGFactory {
 								}
 							}
 							if (!mapped) {
-								//for( Method methodDef : nonStaticMethodDefs.get(methodKey)) {
-								//	addCallEdge( cg, methodCall, methodDef);
-								//}
+								for( Method methodDef : nonStaticMethodDefs.get(methodKey)) {
+									addCallEdge( cg, methodCall, methodDef);
+								}
 							}
 						} else {
-							//for( Method methodDef : nonStaticMethodDefs.get(methodKey)) {
-							//	addCallEdge( cg, methodCall, methodDef);
-							//}
+							for( Method methodDef : nonStaticMethodDefs.get(methodKey)) {
+								addCallEdge( cg, methodCall, methodDef);
+							}
 							ambiguousNotMapped++;
 						}
 					}
