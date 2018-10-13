@@ -8,6 +8,7 @@ post_dom_tree = defaultdict(list)
 def load_graph():
     global id_map, post_dom_tree
     g = nx.MultiDiGraph()
+    c_nodes = load_cypher_graph_nodes()
 
     fd = open("tmp/id_map.csv", "r")
     for line in fd:
@@ -15,6 +16,8 @@ def load_graph():
         id_map[new] = orig
         rev_id_map[orig].append(new)
         g.add_node(new)
+        g.nodes[new]["has_concat"] = c_nodes[orig]["has_concat"]
+        g.nodes[new]["funcid"] = c_nodes[orig]["funcid"]
     fd.close()
 
     fd = open("tmp/handleable.csv", "r")
@@ -63,6 +66,55 @@ def post_dominates(n):
         work.extend(post_dom_tree[cur])
     return post_dominates
 
+def instr_analysis(g, pdoms, cur, fid, visited):
+    preds = filter(
+            lambda (s,e,d): d["label"] == "REACHES",
+            g.in_edges([cur], data=True))
+
+    if not preds:
+        return [cur]
+
+    preds = filter(lambda (s,e,d): s not in visited, preds)
+    preds = map(lambda (s,e,d): s, preds)
+    visited.update(preds)
+
+    if not preds:
+        return []
+    elif all([pred in pdoms and  
+             g.node[pred]["handleable"]
+             for pred in preds]):
+        # if all preds are post dominated by the sink
+        # and all preds are handleable, we can take
+        # another step back
+        pts = []
+        for p in preds:
+            pts.extend(instr_analysis(g, pdoms, p, fid, visited))
+        if any([g.node[i]["funcid"] != fid for i in pts]):
+            return [cur]
+        else:
+            return pts
+    else:
+        return [cur]
+        # otherwise, we stop here
+        instr_points.append(cur)
+
+
+def find_instrumentation_point2(g, sink):
+    pdoms = post_dominates(sink)
+    visited = set([sink])
+    instr_points = instr_analysis(g, pdoms, sink, g.node[sink]["funcid"], visited)
+
+    # grab the tainted variable names
+    ret = defaultdict(list)
+    for i in instr_points:
+        for s,e,d in filter(lambda (s,e,d): d["label"] == "REACHES",
+                g.in_edges(i, data=True)):
+            ret[i].append(d["var"])
+        
+    return ret
+
+
+
 """
 finds instrumentation points given a CFG with one entry
 and one exit and the data dependence edges.
@@ -74,6 +126,8 @@ def find_instrumentation_point(g, sink):
     instr_points = []
     visited = set([sink])
     work = [sink]
+    has_concat = False
+    #import pdb; pdb.set_trace()
     while work:
         cur = work.pop()
         preds = filter(
@@ -97,9 +151,15 @@ def find_instrumentation_point(g, sink):
             # and all preds are handleable, we can take
             # another step back
             work.extend(preds)
+            has_concat |= any(map(lambda n: g.node[n]["has_concat"], preds))
         else:
             # otherwise, we stop here
             instr_points.append(cur)
+
+    if not has_concat: # no point in instrumenting anything if 
+                       # we can't make any good gainz
+        instr_points = [sink]
+
     ret = defaultdict(list)
     for i in instr_points:
         for s,e,d in filter(lambda (s,e,d): d["label"] == "REACHES",
@@ -107,7 +167,6 @@ def find_instrumentation_point(g, sink):
             ret[i].append(d["var"])
         
     return ret
-
        
 def test(sink):
     global rev_id_map, id_map
@@ -124,7 +183,7 @@ def main():
     instr_result = defaultdict(lambda: defaultdict(set))
     ccfg_ids = defaultdict(list)
     for sink in tainted:
-        for i, vs in find_instrumentation_point(g, sink).iteritems():
+        for i, vs in find_instrumentation_point2(g, sink).iteritems():
             instr_i = id_map[i]
             ccfg_ids[instr_i].append(i)
             instr_result[id_map[sink]][instr_i].update(vs)
