@@ -5,29 +5,7 @@ import java.util.*;
 import ast.expressions.*;
 import udg.ASTNodeASTProvider;
 import udg.ASTProvider;
-import udg.php.useDefAnalysis.environments.ArrayIndexingEnvironment;
-import udg.php.useDefAnalysis.environments.AssignmentEnvironment;
-import udg.php.useDefAnalysis.environments.AssignmentWithOpEnvironment;
-import udg.php.useDefAnalysis.environments.CatchEnvironment;
-import udg.php.useDefAnalysis.environments.ClassConstantEnvironment;
-import udg.php.useDefAnalysis.environments.ClosureVarEnvironment;
-import udg.php.useDefAnalysis.environments.ConstantEnvironment;
-import udg.php.useDefAnalysis.environments.EmitDefEnvironment;
-import udg.php.useDefAnalysis.environments.EmitUseEnvironment;
-import udg.php.useDefAnalysis.environments.EmitDefAndUseEnvironment;
-import udg.php.useDefAnalysis.environments.FieldDeclarationEnvironment;
-import udg.php.useDefAnalysis.environments.FunctionCallEnvironment;
-import udg.php.useDefAnalysis.environments.ArgumentListEnvironment;
-import udg.php.useDefAnalysis.environments.ForEachEnvironment;
-import udg.php.useDefAnalysis.environments.IncDecEnvironment;
-import udg.php.useDefAnalysis.environments.ParameterEnvironment;
-import udg.php.useDefAnalysis.environments.PropertyEnvironment;
-import udg.php.useDefAnalysis.environments.StaticPropertyEnvironment;
-import udg.php.useDefAnalysis.environments.StaticVariableDeclarationEnvironment;
-import udg.php.useDefAnalysis.environments.SwitchEnvironment;
-import udg.php.useDefAnalysis.environments.BaseExpressionEnvironment;
-import udg.php.useDefAnalysis.environments.UseDefEnvironment;
-import udg.php.useDefAnalysis.environments.VariableEnvironment;
+import udg.php.useDefAnalysis.environments.*;
 import udg.php.useDefGraph.UseOrDef;
 
 import java.io.BufferedReader;
@@ -116,8 +94,6 @@ public class PHPASTDefUseAnalyzer
 
 	protected void traverseAST(ASTProvider astProvider)
 	{
-		if (((ASTNodeASTProvider)astProvider).getASTNode().getNodeId() == 320)
-			System.out.print("");
 		UseDefEnvironment env = createUseDefEnvironment(astProvider);
 		env.setASTProvider(astProvider);
 
@@ -254,6 +230,7 @@ public class PHPASTDefUseAnalyzer
 			// be used as standalone expressions as a predicate, i.e., within
 			// the guard of some if/while/etc. statement
 			case "UnaryOperationExpression":
+				return new UnaryOpEnvironment();
 			case "InstanceofExpression":
 				return new EmitUseEnvironment();
 

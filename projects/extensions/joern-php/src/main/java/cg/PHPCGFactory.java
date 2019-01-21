@@ -4,6 +4,7 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 
+import ast.NullNode;
 import ast.expressions.CallExpressionBase;
 import ast.expressions.Identifier;
 import ast.expressions.NewExpression;
@@ -24,7 +25,7 @@ import misc.MultiHashMap;
 public class PHPCGFactory {
 
 	// maintains a map of known function names (e.g., "B\foo" -> function foo() in namespace B)
-	private static HashMap<String,FunctionDef> functionDefs = new HashMap<String,FunctionDef>();
+	private static MultiHashMap<String,FunctionDef> functionDefs = new MultiHashMap<>();
 	// maintains a list of function calls
 	private static LinkedList<CallExpressionBase> functionCalls = new LinkedList<CallExpressionBase>();
 	
@@ -111,7 +112,8 @@ public class PHPCGFactory {
 			}
 		}
 	}
-	
+
+
 	private static void createStaticMethodCallEdges(CG cg) {
 		
 		for( StaticCallExpression staticCall : staticMethodCalls) {
@@ -296,6 +298,20 @@ public class PHPCGFactory {
 		
 		return ret;
 	}
+
+	private static boolean addCallEdgeIfDefinitionKnown(CG cg, MultiHashMap<String,? extends FunctionDef> defSet, CallExpressionBase functionCall, String functionKey) {
+
+		boolean ret = true;
+
+		// check whether we know the called function
+		if( defSet.containsKey(functionKey)) {
+			for (FunctionDef f : defSet.get(functionKey)) {
+				ret &= addCallEdge(cg, functionCall, f);
+			}
+		}
+
+		return ret;
+	}
 	
 	/**
 	 * Adds an edge to a given call graph.
@@ -341,7 +357,7 @@ public class PHPCGFactory {
 	 *                    be used for that name and the old function definition will be returned.
 	 * @return If there already exists a PHP function definition with the same name,
 	 *         then returns that function definition. Otherwise, returns null. For non-static method
-	 *         definitions, always returns null.
+	 *         definitions and function definitions, always returns null.
 	 */
 	public static FunctionDef addFunctionDef( FunctionDef functionDef) {
 
@@ -357,7 +373,12 @@ public class PHPCGFactory {
 		else if( functionDef instanceof Method
 				&& functionDef.getFlags().contains(PHPCSVNodeTypes.FLAG_MODIFIER_ABSTRACT))
 			return null;
-		
+		else if (functionDef instanceof Method && functionDef.getChild(2) instanceof NullNode) {
+			// In general ignore methods without any function body. This happens, for example,
+			// when defining an interface
+		    return null;
+        }
+
 		// it's a static method
 		else if( functionDef instanceof Method
 				&& functionDef.getFlags().contains(PHPCSVNodeTypes.FLAG_MODIFIER_STATIC)) {
@@ -423,18 +444,18 @@ public class PHPCGFactory {
 		
 			if( functionDefs.containsKey(functionKey)) {
 				System.err.println("Function definition '" + functionKey + "' ambiguous: There are at least two known " +
-						" matching function definitions (id " + functionDefs.get(functionKey).getNodeId() +
-						" and id " + functionDef.getNodeId() + ")");
+						" matching function definitions.");
+
 			}
-			
-			return functionDefs.put( functionKey, functionDef);
-		}		
+			functionDefs.add( functionKey, functionDef);
+			return null;
+		}
 	}
 	
 	/**
 	 * Adds a new function call.
 	 * 
-	 * @param functionCall A PHP function/method/constructor call. An arbitrary number of
+	 * @param callExpression A PHP function/method/constructor call. An arbitrary number of
 	 *                     distinguished calls to the same function/method/constructor can
 	 *                     be added.
 	 */

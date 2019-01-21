@@ -23,8 +23,9 @@ public class VariableEnvironment extends UseDefEnvironment
 			String code = astProvider.getChild(0).getEscapedCodeStr();
 			symbols.add(new Symbol(code));
 		} else {
-			// otherwise, it's an expression evaluating to a variable name; not much we can
-			// do statically :(
+		    //Symbol unkSym = new Symbol("");
+		    //unkSym.symbolUnknown = true;
+		    //symbols.add(unkSym);
 		}
 		return symbols;
 	}

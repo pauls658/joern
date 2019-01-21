@@ -2,6 +2,7 @@ package udg.php.useDefAnalysis.environments;
 
 import java.util.Collection;
 import java.util.LinkedList;
+import java.util.NoSuchElementException;
 
 import udg.ASTNodeASTProvider;
 import udg.ASTProvider;
@@ -47,7 +48,11 @@ public class ArrayIndexingEnvironment extends UseDefEnvironment
 			if (child.getChildNumber() == 0) {
 				assert childSymbols.size() == 1;
 				// Save the array symbol til we know more about the index
-				this.arraySymbol = childSymbols.getFirst();
+				try {
+					this.arraySymbol = childSymbols.getFirst();
+				} catch(NoSuchElementException e) {
+					System.out.print("");
+				}
 				this.arraySymbol.isArray = true;
 				if (ourDepth > 1) {
 					// The dimension is > 1, so we can't kill previous defs

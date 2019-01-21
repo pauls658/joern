@@ -3,6 +3,8 @@ package tools.php.ast2cpg;
 import java.io.FileReader;
 import java.io.IOException;
 
+import ast.NullNode;
+import ast.php.functionDef.Method;
 import cfg.nodes.AbstractCFGNode;
 import org.apache.commons.cli.ParseException;
 
@@ -102,9 +104,11 @@ public class Main {
 
 		FunctionDef rootnode;
 		while ((rootnode = (FunctionDef)extractor.getNextFunction()) != null) {
+		    // skip things like interface method declarations and abstract methods
+			if (!(rootnode instanceof Method) || !(rootnode.getChild(2) instanceof NullNode)) {
 
-			PHPCGFactory.addFunctionDef(rootnode);
-
+				PHPCGFactory.addFunctionDef(rootnode);
+			}
 			// convert() just calls newInstance() of PHPCFGFactory
 			CFG cfg = ast2cfgConverter.convert(rootnode);
 			csvCFGExporter.writeCFGEdges(cfg);

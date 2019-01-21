@@ -29,6 +29,8 @@ public class Symbol {
                          // of the symbol? I.e. should we not kill previous definitions of this
                          // symbol?
 
+    //public boolean symbolUnknown = false; // is this a dynamic variable? i.e. $$var
+
     public String getSymbolEncoding() {
         String enc = name;
         if (isArray) {
