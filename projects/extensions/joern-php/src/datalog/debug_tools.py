@@ -123,6 +123,15 @@ def copied_cfg():
         fd.write("%d,%d,%s\n" % (s, e, var_map[v]))
     fd.close()
 
+def map_stmts(args):
+    fname = args[0]
+    mapped_ids = map(int, open(fname, "rb").read().strip().split('\n'))
+    orig_ids = set()
+    id_map, _ = load_id_map()
+    for mapped_id in mapped_ids:
+        orig_ids.add(id_map[mapped_id])
+    print "\n".join(map(str, sorted(orig_ids)))
+
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         cmd = "<none>"
@@ -133,7 +142,8 @@ if __name__ == "__main__":
             "echos" : unique_echos,
             "datadeps" : datadeps_to_cypher,
             "defuses" : defuses_to_cypher,
-            "copiedcfg" : copied_cfg
+            "copiedcfg" : copied_cfg,
+            "mapstmts": map_stmts
     }
     if cmd not in cmds:
         print "Invalid command: %s" % (cmd)

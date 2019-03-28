@@ -11,3 +11,4 @@ match (A{type:"AST_STATIC_CALL"})-[:PARENT_OF]->(n{childnum:1}) set A.name = n.c
 
 // label function declarations
 match (a:AST) where a.type in ["AST_FUNC_DECL", "AST_METHOD"] or (a)-[:PARENT_OF]->(:AST{type:"AST_PARAM_LIST"}) set a:FUNCDECL;
+

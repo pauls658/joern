@@ -95,8 +95,6 @@ def instr_analysis(g, pdoms, cur, fid, visited):
             return pts
     else:
         return [cur]
-        # otherwise, we stop here
-        instr_points.append(cur)
 
 
 def find_instrumentation_point2(g, sink):

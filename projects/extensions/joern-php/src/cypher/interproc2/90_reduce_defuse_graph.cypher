@@ -16,5 +16,9 @@ remove a.defs remove a.uses;
 
 
 // label BB's that have concats
-match (a:BB)-[:PARENT_OF*..]->(c:AST{type:"AST_BINARY_OP"}) where "BINARY_CONCAT" in c.flags set a.has_concat = true;
+match (a:BB)-[:PARENT_OF*..]->(c:AST) where "BINARY_CONCAT" in c.flags set a.has_concat = true;
+match (a:BB)-[:PARENT_OF*..]->(c:AST{type: "AST_ENCAPS_LIST"}) set a.has_concat = true;
+// artificial args need a special query because they dont have a PARENT_OF relationship
+match (a:ART_AST{type:"arg_entry"})-[:ASSOC]->()-[:PARENT_OF*..]->(c:AST) where "BINARY_CONCAT" in c.flags set a.has_concat = true;
+match (a:ART_AST{type:"arg_entry"})-[:ASSOC]->()-[:PARENT_OF*..]->(c:AST{type:"AST_ENCAPS_LIST"}) set a.has_concat = true;
 match (a:BB) where not exists(a.has_concat) set a.has_concat = false;

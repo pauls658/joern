@@ -198,6 +198,17 @@ def write_datalog_edge(start, end):
     global datalog_edge_fd
     datalog_edge_fd.write("%d\t%d\n" % (start, end))
 
+def write_datalog_ctrldep(n, d):
+    """
+    n is control dependent on d.
+    """
+    global datalog_ctrldep_fd
+    datalog_ctrldep_fd.write("%d\t%d\n" % (n, d))
+
+def write_datalog_safebranch(stmt_id):
+    global datalog_safebranch_fd
+    datalog_safebranch_fd.write("%d\n" % (stmt_id))
+
 def write_datalog_def(stmt_id, sym):
     global datalog_def_fd, g, array_indexes
     datalog_def_fd.write("%d\t%s\n" % (stmt_id, sym.final_enc()))
@@ -344,7 +355,6 @@ def calc_func_depths(g, func_entry, cur_depth=0, call_stack=set()):
 last_created = {}
 def make_copied_cfg(g, func_entry, max_depth, copied_cfg, call_stack={}):
     global idc, last_created, id_map, func_depth
-
     if func_depth[func_entry] >= max_depth and func_entry in last_created:
         # no copy
         return last_created[func_entry]
@@ -470,9 +480,14 @@ def write_func_depths(args):
     entry = sqmail_entries(g, file_name)[0][0]
     calc_func_depths(g, entry)
 
+    LoC = 0
     for eid, depth in func_depth.iteritems():
+        start_line = g.nodes[eid]["startlineno"]
+        end_line = g.nodes[eid]["endlineno"]
+        LoC += (end_line - start_line)
         fd.write("%s (%d): %d\n" % (g.nodes[eid]["name"], eid, depth))
     fd.close()
+    print "LoC = ", str(LoC)
 
 
 def udg_to_datalog(udg):
@@ -491,29 +506,33 @@ idc = 0
 # copied id -> orig id
 id_map = {}
 def open_output_files():
-	global datalog_fd
-	global datalog_edge_fd
-	global datalog_def_fd
-	global datalog_use_fd
-	global datalog_source_fd
-	global datalog_sink_fd
-	global datalog_safe_sink_fd
-	global datalog_tainted_sink_fd
-	global datalog_star_fd
-	global datalog_nokill_fd
-	global datalog_kill_fd
+    global datalog_fd
+    global datalog_edge_fd
+    global datalog_ctrldep_fd
+    global datalog_safebranch_fd
+    global datalog_def_fd
+    global datalog_use_fd
+    global datalog_source_fd
+    global datalog_sink_fd
+    global datalog_safe_sink_fd
+    global datalog_tainted_sink_fd
+    global datalog_star_fd
+    global datalog_nokill_fd
+    global datalog_kill_fd
 
-	datalog_fd = open("tmp/facts", "w+")
-	datalog_edge_fd = open("tmp/edge.csv", "w+")
-	datalog_def_fd = open("tmp/def.csv", "w+")
-	datalog_use_fd = open("tmp/use.csv", "w+")
-	datalog_source_fd = open("tmp/source.csv", "w+")
-	datalog_sink_fd = open("tmp/sink.csv", "w+")
-	datalog_safe_sink_fd = open("tmp/safe_sink.csv", "w+")
-	datalog_tainted_sink_fd = open("tmp/tainted_sink.csv", "w+")
-	datalog_star_fd = open("tmp/star_def.csv", "w+")
-	datalog_nokill_fd = open("tmp/nokill.csv", "w+")
-	datalog_kill_fd = open("tmp/kill.csv", "w+")
+    datalog_fd = open("tmp/facts", "w+")
+    datalog_edge_fd = open("tmp/edge.csv", "w+")
+    datalog_ctrldep_fd = open("tmp/ctrldep.csv", "w+")
+    datalog_safebranch_fd = open("tmp/safebranch.csv", "w+")
+    datalog_def_fd = open("tmp/def.csv", "w+")
+    datalog_use_fd = open("tmp/use.csv", "w+")
+    datalog_source_fd = open("tmp/source.csv", "w+")
+    datalog_sink_fd = open("tmp/sink.csv", "w+")
+    datalog_safe_sink_fd = open("tmp/safe_sink.csv", "w+")
+    datalog_tainted_sink_fd = open("tmp/tainted_sink.csv", "w+")
+    datalog_star_fd = open("tmp/star_def.csv", "w+")
+    datalog_nokill_fd = open("tmp/nokill.csv", "w+")
+    datalog_kill_fd = open("tmp/kill.csv", "w+")
 
 g = None
 copied_funcs = 0
@@ -564,14 +583,6 @@ def write_handleable_info():
         fd.write("%d,%d\n" % (new, g.nodes[orig]["handleable"]))
     fd.close()
 
-# Dear elves,
-# I'm impressed with your ability to cause me days
-# of frustration with such small changes to my code.
-# I propose an alliance. In return, I grant you 
-# bouncing privileges on my big blue/gray exercise ball.
-# I eagerly await your response.
-# Sincerely,
-#   Brandon
 def main(args):
     global datalog_fd, copied_funcs
     global g
@@ -830,6 +841,47 @@ def add_kills(udg, array_indexes):
 #                    for i in array_indexes[d.name]:
 #                        data["kills"].add(Symbol(d.name + "[" + i))
 
+def trans_closure(deps):
+    closure = {}
+    for n in deps.keys():
+        work = []
+        work.extend(deps[n])
+        visited = set()
+        while work:
+            cur = work.pop()
+            if cur in visited:
+                continue
+            visited.add(cur)
+            work.extend(deps[cur])
+
+        closure[n] = list(visited)
+
+    return closure
+
+def write_control_dependencies(copied_cfg):
+    # reverse_cfg is a "view" of copied_cfg. This does
+    # not change anything in copied_cfg.
+    reverse_cfg = copied_cfg.reverse()
+    # 1 is always the id of the exit node
+    dfs = nx.dominance_frontiers(reverse_cfg, 1)
+
+    ctrldeps = defaultdict(list)
+    for n, df in dfs.iteritems():
+        for d in df:
+            ctrldeps[d].append(n)
+
+    ctrldeps = trans_closure(ctrldeps)
+
+    for d, deps in ctrldeps.iteritems():
+        for dep in deps:
+            # dep is control dependent on d
+            write_datalog_ctrldep(dep, d)
+
+def write_safe_branches(copied_cfg):
+    global id_map, g
+    for n in copied_cfg:
+        if g.nodes[id_map[n]].get("safeBranch", False):
+            write_datalog_safebranch(n)
 
 def arrays(args):
     global g
@@ -852,6 +904,8 @@ def arrays(args):
         fd.write(str(g.nodes[entry]["exit_id"]))
     add_def_use_to_graph(copied_cfg)
     preprocesses_graph(copied_cfg)
+    write_control_dependencies(copied_cfg)
+    write_safe_branches(copied_cfg)
     array_indexes = collect_array_indexes(copied_cfg)
     resolve_array_indexes(copied_cfg)
     handle_arrays(copied_cfg, array_indexes)

@@ -15,3 +15,4 @@ set r.exit_id = ID(exit);
 match
 ()<-[r:INTERPROC{type:"entry"}]-(entry)-[:CALL_ID]->()<-[:CALL_ID]-(exit)<-[:INTERPROC{type:"exit"}]-()
 set r.exit_id = ID(exit);
+

@@ -1,4 +1,5 @@
 from collections import defaultdict
+import json
 
 """
 Returns a list of the copied-cfg node ids that are both
@@ -32,3 +33,11 @@ def load_var_map():
         rev_var_map[var_name] = i
     return var_map, rev_var_map
 
+def load_cypher_graph_nodes():
+    nodes = {}
+    rows = json.load(open("tmp/nodes.json", "rb"))["results"][0]["data"]
+    for row in rows:
+        row = row["row"][0]
+        i = int(row["id"])
+        nodes[i] = row
+    return nodes

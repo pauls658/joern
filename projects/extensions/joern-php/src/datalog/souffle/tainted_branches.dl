@@ -11,14 +11,14 @@
 .decl datadep(def_stmt:number, use_stmt:number, var:number)
 // n is control dependent on d
 // if d is tainted, then n is too
-.decl ctrldep(n:number, d:number)
-.decl safebranch(n:number)
-.decl taintedCtrldep(n:number)
-//.decl tainted_branch(def_stmt:number)
+//.decl ctrldep(n:number, d:number)
+//.decl safebranch(n:number)
+//.decl taintedCtrldep(n:number)
+.decl tainted_branch(def_stmt:number)
 
 .input edge(IO=file, filename="tmp/edge.csv")
-.input ctrldep(IO=file, filename="tmp/ctrldep.csv")
-.input safebranch(IO=file, filename="tmp/safebranch.csv")
+//.input ctrldep(IO=file, filename="tmp/ctrldep.csv")
+//.input safebranch(IO=file, filename="tmp/safebranch.csv")
 .input def(IO=file, filename="tmp/def.csv")
 .input star_def(IO=file, filename="tmp/star_def.csv")
 .input use(IO=file, filename="tmp/use.csv")
@@ -56,15 +56,9 @@ tainted_sink(this_stmt) :- sink(this_stmt), tainted(this_stmt).
 // compute data dependences
 datadep(def_stmt, use_stmt, var) :- livedef(def_stmt, var, use_stmt), use(use_stmt, var).
 
-// account for control dependences
-taintedCtrldep(stmt) :- tainted(d), ctrldep(stmt, d), !safebranch(d).
-// propagate control dependence taintedness
-taintedCtrldep(stmt) :- ctrldep(stmt, d), taintedCtrldep(d).
-tainted(stmt) :- taintedCtrldep(stmt).
-
-//tainted_branch(stmt) :- edge(stmt, stmt1), edge(stmt, stmt2), stmt1 != stmt2, tainted(stmt).
+tainted_branch(stmt) :- edge(stmt, stmt1), edge(stmt, stmt2), stmt1 != stmt2, tainted(stmt).
 
 .output tainted_sink
 .output datadep
 .output livedef
-//.output tainted_branch
+.output tainted_branch
