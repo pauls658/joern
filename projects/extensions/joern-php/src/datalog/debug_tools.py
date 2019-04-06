@@ -36,6 +36,15 @@ def load_uses():
     fd.close()
     return uses
 
+def load_ctrldefs():
+    fd = open("tmp/ctrldef.csv", "rb")
+    ctrldefs = defaultdict(list)
+    for line in fd:
+        n, var = line.strip().split("\t")
+        n = int(n)
+        ctrldefs[n].append(var)
+    fd.close()
+    return ctrldefs
 
 def load_data_deps():
     fd = open("datadep.csv", "r")
@@ -106,14 +115,21 @@ def copied_cfg():
     defs = load_defs()
     uses = load_uses()
     kills = load_kills()
+    ctrldefs = load_ctrldefs()
     fd = open("nodes.csv", "w+")
-    fd.write("id,def,use,kill,orig_id\n")
+    fd.write("id,def,use,kill,orig_id,ctrltainted\n")
     for new, orig in id_map.iteritems():
-        fd.write("%d,%s,%s,%s,%d\n" % (new,
+        if new in ctrldefs:
+            is_ctrltainted = "true"
+        else:
+            is_ctrltainted = "false"
+        fd.write("%d,%s,%s,%s,%d,%s\n" % (new,
             ";".join(map(lambda vi: var_map[int(vi)], defs[new])),
             ";".join(map(lambda vi: var_map[int(vi)], uses[new])),
             ";".join(map(lambda vi: var_map[int(vi)], kills[new])),
-            orig))
+            orig,
+            is_ctrltainted
+            ))
     fd.close()
 
     datadeps = load_data_deps()

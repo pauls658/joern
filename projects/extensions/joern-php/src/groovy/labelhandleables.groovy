@@ -128,7 +128,164 @@ class G {
 		return true;
     }
 
-	def labelHandleable() {
+	def getChildren(node) {
+		def children = []
+		children.addAll(node.vertices(Direction.OUT, "PARENT_OF"))
+		return children
+	}
+
+	def getCallNodeFromArtArg(artifBB) {
+		def type = artifBB.value("type")
+		switch (type) {
+			case "arg_entry":
+			case "arg_exit":
+				return artifBB.vertices(Direction.OUT, "CALL_ID")[0]
+			case "return":
+				return artifBB.vertices(Direction.OUT, "ASSOC")[0]
+			default:
+				return null
+		}
+	}
+
+	// method calls where non of args or returns are
+	// ctrl tainted
+	public HashSet methodCallWhitelist = [
+		"fetch1",
+		"query"
+	]
+
+	public HashSet functionCallWhiteList = [
+		"is_object","is_array",	"is_string", "defined", "define", "dirname", "gettype", "trim", "count", "substr", "strlen", "explode", "preg_split", "strtoupper", "strtolower", "array_change_key_case", "stripslashes", "preg_quote", "htmlspecialchars", "sizeof", "mb_convert_encoding", "is_scalar", "implode", "reset", "get_object_vars", "floor", "sprintf", "rtrim", "strtotime", "is_integer", "date", "mktime", "urlencode", "asort", "is_a", "get_class", "intval"
+	]
+
+	def secondArgIsNonEmptyString(callNode) {
+		def secondArg = g.V(callNode.id()).out("PARENT_OF").has("type", "AST_ARG_LIST").out("PARENT_OF").has("childnum", 1).next()
+		if (secondArg.value("type").equals("string"))
+			return !secondArg.value("code").equals("");
+		else
+			return false
+	}
+
+	def getStaticCallName(callNode) {
+		def staticNameNode = g.V(callNode.id()).out("PARENT_OF").has("childnum", 0).out("PARENT_OF").next()
+		if (staticNameNode.value("type").equals("string"))
+			return staticNameNode.value("code")
+		else
+			return ""
+	}
+
+	def isCtrlTaintedBuiltin(artifBB) {
+		def callNode = getCallNodeFromArtArg(artifBB)
+		def callType = callNode.value("type")
+		def callName = null;
+
+		if ("name" in callNode.keys())
+			callName = callNode.value("name")
+		else
+			return true // statically unknown method call
+
+		switch (callType) {
+			case "AST_METHOD_CALL":
+				return !(callName in methodCallWhitelist)
+			case "AST_CALL":
+				if (callName.equals("str_replace")) {
+					return !secondArgIsNonEmptyString(callNode)
+				} else if (callName.equals("preg_replace")) {
+					return !secondArgIsNonEmptyString(callNode)
+				}
+				return !(callName in functionCallWhiteList)
+			case "AST_STATIC_CALL":
+				def staticClassName = getStaticCallName(callNode)
+				if (staticClassName.equals("PEAR") && callName.equals("raiseError"))
+					return false
+				else
+					return true
+			case "AST_NEW":
+				return true
+		}
+	}
+
+	def isCtrlTainted(bb) {
+		def type = bb.value("type")
+		switch (type) {
+			case "AST_ASSIGN":
+				def rhs = g.V(bb.id()).out("PARENT_OF").has("childnum", 1).next()
+				return isCtrlTainted(rhs)
+			case "AST_ARRAY":
+				def children = getChildren(bb)
+				for (child in children) {
+					if (isCtrlTainted(child))
+						return true
+				}
+				return false
+			// cases where the node has one AST child
+			// and it doesn't affect anything
+			case "AST_UNSET":
+			case "AST_CAST":
+			case "AST_RETURN":
+			case "AST_ECHO":
+			case "AST_PRINT":
+			case "AST_POST_DEC":
+			case "AST_POST_INC":
+			case "AST_PRE_DEC":
+			case "AST_PRE_INC":
+				def child = getChildren(bb)[0]
+				return isCtrlTainted(child)
+			// cases with two children
+			// where we want to process each child
+			case "AST_DIM": // $a[$i]
+			case "AST_BINARY_OP": 
+			case "AST_PROP": // $o->$p
+			case "AST_ASSIGN_OP":
+			case "AST_ARRAY_ELEM": // part of array( "key" => $var, ... )
+				def children = getChildren(bb)
+				return isCtrlTainted(children[0]) && isCtrlTainted(children[1])
+			// actual handling for function calls
+			// for exit and entry, 
+			case "arg_entry":
+			case "arg_exit":
+				if (g.V(bb.id()).out("CALL_ID").out("CALLS").toList().size() > 0) {
+					return false
+				} else {
+					return isCtrlTaintedBuiltin(bb)
+				}
+			case "return":
+				if (g.V(bb.id()).out("ASSOC").out("CALLS").toList().size() > 0) {
+					return false
+				} else {
+					return isCtrlTaintedBuiltin(bb)
+				}
+			case "AST_VAR":
+			case "integer":
+			case "string":
+			case "AST_CONST":
+				return false;
+			case "AST_CALL":
+			case "AST_STATIC_CALL":
+			case "AST_METHOD_CALL":
+			case "AST_NEW":
+				// the call node is not considered part of the CFG.
+				// If this function will cause control tainting, we
+				// will mark it when we process the artificial return
+				// node
+				return false;
+			// obvious/not interesting cases go here
+			case "AST_ENCAPS_LIST":
+			case "AST_PARAM":
+			case "CFG_FUNC_ENTRY":
+			case "CFG_FUNC_EXIT":
+			case "AST_GLOBAL":
+			case "AST_INCLUDE_OR_EVAL":
+			case "NULL":
+			case "AST_EXIT":
+			case "AST_FOREACH":
+				return false
+			default:
+				return true;
+		}
+	}
+
+	def labelHandleableAndCtrlTainted() {
 		def bbs = 
 		g.V().\
 		where(
@@ -143,12 +300,32 @@ class G {
 			} else {
 				g.V(bb.id()).property('handleable', false).next()
 			}
+
+			// maybe should consider assign in stmt
+			// if BB is AST_CALL, it is a call where return is ignored
+			if ("branch" in bb.keys() && (bb.value("branch") == true) || bb.value("type").equals("AST_CALL")) { 
+				g.V(bb.id()).property('ctrltainted', false).next()
+			} else if (isCtrlTainted(bb)) {
+				g.V(bb.id()).property('ctrltainted', true).next()
+			} else {
+				g.V(bb.id()).property('ctrltainted', false).next()
+			}
 		}
+	}
+
+	def findCtrlTainted(ccfgId) {
+		def actualId = g.V().hasLabel("CCFG").has("id", ccfgId).next().id()
+		g.V(actualId).repeat(__.in("REACHES").simplePath()).until(has("ctrltainted", true)).limit(1).path()
 	}
 
 	def findNodeLoc(node) {
 		def lineno = node.value("lineno")
-		def fileName = g.V(node.id()).repeat(__.in("PARENT_OF")).until(has("type", "AST_TOPLEVEL")).toList()[0].value("name")
+		def fid = (int)node.value("funcid")
+		def fileName = g.V(fid).\
+			until(and(has("type", "AST_TOPLEVEL"), 
+			__.filter{ "flags" in it.get().keys() && "TOPLEVEL_FILE" in it.get().value("flags") })).\
+			repeat(__.in("PARENT_OF")).toList()[0].value("name")
+
  		ProcessBuilder processBuilder = new ProcessBuilder("/usr/bin/vi", fileName, "+" + lineno);
  		processBuilder.redirectOutput(ProcessBuilder.Redirect.INHERIT);
  		processBuilder.redirectError(ProcessBuilder.Redirect.INHERIT);
@@ -160,98 +337,173 @@ class G {
 
 	}
 
-	public HashSet safeBuiltInFuncs = [
-		//"is_array",
-		//"is_object"
+	public HashSet typeOneBuiltInFuncs = [
+		"is_array",
+		"is_object",
+		"is_string",
+		"is_bool",
+		"is_numeric",
+		"is_float",
+		"is_int",
+		"is_string",
+		"is_object",
 	];
 
-	def isSafeFunc(node) {
+	public HashSet typeZeroBuiltInFuncs = [
+		"is_a"
+	]
+
+	def getFuncType(node) {
 		// check if have implementation
-		if (node.edges(Direction.OUT, "CALLS")[0] == null) {
-			// in the future we can analyze the functions implementation,
-			// but for now just assume its false
-			return false
+		if (node.edges(Direction.OUT, "CALLS")[0] != null) {
+			// we have implementation, so this will be a type 1
+			// branch
+			return 1
 		} else {
 			def funcName = node.value("name")
-			return safeBuiltInFuncs.contains(funcName)
+			
+			if (typeOneBuiltInFuncs.contains(funcName))
+				return 1
+			else if (typeZeroBuiltInFuncs.contains(funcName))
+				return 0
+			else
+				return 2
 		}
 	}
 
-	public HashSet binaryBoolFlags = [
+	public HashSet logicalConnectives = [
 		"BINARY_BOOL_AND",
 		"BINARY_BOOL_OR",
-		"BINARY_BOOL_XOR",
-		"BINARY_IS_IDENTICAL",
-		"BINARY_IS_NOT_IDENTICAL",
+		"BINARY_BOOL_XOR"
+	]
+	public HashSet logicalEquality = [
 		"BINARY_IS_EQUAL",
 		"BINARY_IS_NOT_EQUAL",
+		"BINARY_IS_IDENTICAL",
+		"BINARY_IS_NOT_IDENTICAL",
 		"BINARY_IS_SMALLER",
 		"BINARY_IS_SMALLER_OR_EQUAL",
 		"BINARY_IS_GREATER",
-		"BINARY_IS_GREATER_OR_EQUAL",
+		"BINARY_IS_GREATER_OR_EQUAL"
 	]
-	
-	public Neo4jVertex badNode = null
-	def isEmptyComparison(node) {
-		def hasEmptyString = false, hasVar = false
-		def children = []
-		children.addAll(node.vertices(Direction.OUT, "PARENT_OF"))
-		if( !(children[0] != null && children[1] != null)) {
-			println node.value("flags")
-			return false
-			
-		}
-		if (children[0].value("type").equals("AST_VAR"))
-			hasVar = true
-		else if (children[0].value("type").equals("string")) {
-			hasEmptyString = children[0].value("code").equals("")
-		}
 
-		if (children[1].value("type").equals("AST_VAR"))
-			hasVar = true
-		else if (children[1].value("type").equals("string")) {
-			hasEmptyString = children[1].value("code").equals("")
-		}
-
-		return hasEmptyString && hasVar
+	def getConstName(constNode) {
+		return g.V(constNode.id()).out("PARENT_OF").out("PARENT_OF").properties("code").next().value()
 	}
-	
-	def isSafeBranch(node) {
-		switch(node.value("type")) {
-			case "AST_FOREACH":
+
+	def isVar(node) {
+		def type = node.value("type")
+		switch (type) {
+			case "AST_VAR":
 				return true;
-			case "AST_UNARY_OP":
-				def child = node.vertices(Direction.OUT, "PARENT_OF")[0]
-				return isSafeBranch(child)
-			case "AST_BINARY_OP":
-				def flag = node.value("flags")
-				if (["BINARY_IS_EQUAL", "BINARY_IS_NOT_EQUAL"].any{flag.contains(it)}) {
-					return isEmptyComparison(node)
-				} else {
-					return false
-				}
-			case "AST_CALL":
-				return isSafeFunc(node)
+			case "AST_PROP":
+				return true;
 			default:
 				return false;
 		}
 	}
 
-	def labelSafeBranches() {
+	def isEmpty(node) {
+		if (node.value("type").equals("string")) {
+			return node.value("code").equals("")
+		} else if (node.value("type").equals("AST_CONST")) {
+			def constName = getConstName(node).toLowerCase()
+			return (constName in ["true", "false", "null"])
+		} else if (node.value("type").equals("integer")) {
+			return node.value("code").equals("0")
+		}
+		return false
+	}
+
+	// checks if a predicate is of the form:
+	// -   $var == ""
+    // -   $var == {false,true}
+	def isEmptyComparison(node) {
+		def hasEmptyString = false, hasVar = false
+		def children = getChildren(node)
+		if( !(children[0] != null && children[1] != null)) {
+			println node.value("flags")
+			return false
+		}
+		if (isVar(children[0])) {
+			hasVar = true
+		} else if (isEmpty(children[0])){
+			hasEmptyString = true
+		}
+
+		if (isVar(children[1])) {
+			hasVar = true
+		} else if (isEmpty(children[1])) {
+			hasEmptyString = true
+		}
+
+		return hasEmptyString && hasVar
+	}
+	
+	def getBranchType(node) {
+		switch(node.value("type")) {
+			case "AST_FOREACH":
+				return 0;
+			case "AST_UNARY_OP":
+				def child = node.vertices(Direction.OUT, "PARENT_OF")[0]
+				return getBranchType(child)
+			case "AST_BINARY_OP":
+				def flag = node.value("flags")
+				if (logicalEquality.any{flag.contains(it)}) {
+					return (isEmptyComparison(node) ? 1 : 2)
+				} else if (logicalConnectives.any{flag.contains(it)}) {
+					def children = getChildren(node)
+					return Integer.max(getBranchType(children[0]), getBranchType(children[1]))
+				} else {
+					return 2
+				}
+			case "AST_EMPTY":
+			case "AST_ISSET":
+				return 1
+			case "AST_CALL":
+			case "AST_STATIC_CALL":
+			case "AST_METHOD_CALL":
+				// in branches, call node is the "branch" in the CFG
+				return getFuncType(node)
+			case "AST_VAR": // if ($var)
+			case "AST_PROP": // if ($o->var)
+				return 1;
+			default:
+				return 2;
+		}
+	}
+
+	def labelBranches() {
 		def branchNodes = g.V().match(__.as('a').out('FLOWS_TO').as('b'),
 						__.as('a').out('FLOWS_TO').as('c'), 
 						where('b', neq('c'))).\
 					select('a').dedup().toList()
 		def unsafeBranches = []
 		for (node in branchNodes) {
-			if (isSafeBranch(node)) {
-				g.V(node.id()).property('safeBranch', true).next()
-			} else {
-				g.V(node.id()).property('safeBranch', false).next()
+			def branchType = getBranchType(node)
+			g.V(node.id()).property('branch', branchType).next()
+			if (branchType == 2)
 				unsafeBranches += node
-			}
 		}
 		return unsafeBranches
+	}
+
+	ArrayList nodeIds = new ArrayList()
+	int curNode = 0;
+	int prevNode = 0;
+	def loadNodeIds() {
+		def fpath = "/home/brandon/joern/projects/extensions/joern-php/src/datalog/tbranches"
+		File f = new File(fpath)
+		def lines = f.readLines()
+		for (l in lines) {
+			nodeIds += l.toInteger()
+		}
+	}
+
+	def openToNextNode() {
+		findNodeLoc(g.V(nodeIds[curNode]).next())
+		prevNode = nodeIds[curNode]
+		curNode++;
 	}
 
 	def test() {
@@ -266,8 +518,8 @@ class G {
 
 o = new G()
 if (args.size() == 0) {
-	o.labelHandleable()
-	o.labelSafeBranches()
+	o.labelBranches()
+	o.labelHandleableAndCtrlTainted()
 	o.g.graph.tx().commit()
 	o.g.graph.close()
 }

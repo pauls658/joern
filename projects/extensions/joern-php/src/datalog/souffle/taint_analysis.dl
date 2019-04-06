@@ -1,5 +1,11 @@
 .decl edge(start:number, end:number)
-.decl branch(stmt:number)
+
+// type:
+// - 0 : no implicit flows
+// - 1 : implicit flows when ctrldef is used at branch
+// - 2 : implicit flows when any livedef used at branch
+.decl branch(stmt:number, type:number)
+
 .decl def(stmt:number, var:number)
 .decl star_def(stmt:number, var:number)
 .decl use(stmt:number, var:number)
@@ -12,8 +18,7 @@
 .decl datadep(def_stmt:number, use_stmt:number, var:number)
 // n is control dependent on d
 // if d is tainted, then n is too
-//.decl ctrldep(n:number, d:number)
-.decl safebranch(n:number)
+.decl ctrldep(n:number, d:number)
 .decl ctrldef(stmt:number, var:number)
 .decl livectrldef(stmt:number, var:number)
 //.decl taintedCtrldep(n:number)
@@ -21,8 +26,7 @@
 
 .input edge(IO=file, filename="tmp/edge.csv")
 .input branch(IO=file, filename="tmp/branch.csv")
-//.input ctrldep(IO=file, filename="tmp/ctrldep.csv")
-.input safebranch(IO=file, filename="tmp/safebranch.csv")
+.input ctrldep(IO=file, filename="tmp/ctrldep.csv")
 .input ctrldef(IO=file, filename="tmp/ctrldef.csv")
 .input def(IO=file, filename="tmp/def.csv")
 .input star_def(IO=file, filename="tmp/star_def.csv")
@@ -34,9 +38,8 @@
 
 .decl livedef(var:number, def_stmt:number, this_stmt:number)
 
-/* This program will track the explicit ctrldef's
-   and output which branches will have implicit
-   flows */
+/* This program does the full taint analysis
+   including both explicit and implicit flows */
 
 // only init liveness for source variables
 livedef(def_stmt, var, def_stmt) :- def(def_stmt, var), source(def_stmt).
@@ -69,15 +72,19 @@ datadep(def_stmt, use_stmt, var) :- livedef(def_stmt, var, use_stmt), use(use_st
 // if stmt1 uses var2, and var2 is live at stmt1, and the live def of var2 is a ctrldef,
 // then each def'd var at stmt1 is a ctrldef
 ctrldef(stmt1, var1) :- def(stmt1, var1), use(stmt1, var2), livedef(stmt2, var2, stmt1), ctrldef(stmt2, var2).
-livectrldef(stmt, var) :- ctrldef(stmt, var), livedef(stmt, var, stmt1).
+//livectrldef(stmt, var) :- ctrldef(stmt, var), livedef(stmt, var, stmt1).
 
+// branch case 1
+tainted_branch(stmt1) :- use(stmt1, var1), livedef(stmt2, var1, stmt1), ctrldef(stmt2, var1), branch(stmt1, 1).
+// branch case 2
+tainted_branch(stmt1) :- use(stmt1, var1), livedef(stmt2, var1, stmt1), branch(stmt1, 2).
 
-tainted_branch(stmt1) :- use(stmt1, var1), livedef(stmt2, var1, stmt1), ctrldef(stmt2, var1), branch(stmt1), !safebranch(stmt1).
-
-//tainted_branch(stmt) :- branch(stmt), tainted(stmt).
+//taintedCtrldep(stmt) :- tainted_branch(dep), ctrldep(stmt, dep).
+//taintedCtrldep(stmt) :- ctrldep(stmt, dep), taintedCtrldep(dep).
+//tainted(stmt) :- taintedCtrldep(stmt).
 
 .output tainted_sink
 .output datadep
-.output livedef
-.output livectrldef
+//.output livedef
+//.output livectrldef
 .output tainted_branch

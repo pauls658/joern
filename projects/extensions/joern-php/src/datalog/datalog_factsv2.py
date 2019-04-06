@@ -205,9 +205,14 @@ def write_datalog_ctrldep(n, d):
     global datalog_ctrldep_fd
     datalog_ctrldep_fd.write("%d\t%d\n" % (n, d))
 
-def write_datalog_safebranch(stmt_id):
-    global datalog_safebranch_fd
-    datalog_safebranch_fd.write("%d\n" % (stmt_id))
+def write_datalog_branch(stmt_id, t):
+    global datalog_branch_fd
+    datalog_branch_fd.write("%d\t%d\n" % (stmt_id, t))
+
+def write_datalog_ctrldef(stmt_id, sym):
+    global datalog_ctrldef_fd, id_map, sources
+    if id_map[stmt_id] not in sources:
+        datalog_ctrldef_fd.write("%d\t%d\n" % (stmt_id, sym.final_enc()))
 
 def write_datalog_def(stmt_id, sym):
     global datalog_def_fd, g, array_indexes
@@ -480,14 +485,9 @@ def write_func_depths(args):
     entry = sqmail_entries(g, file_name)[0][0]
     calc_func_depths(g, entry)
 
-    LoC = 0
     for eid, depth in func_depth.iteritems():
-        start_line = g.nodes[eid]["startlineno"]
-        end_line = g.nodes[eid]["endlineno"]
-        LoC += (end_line - start_line)
         fd.write("%s (%d): %d\n" % (g.nodes[eid]["name"], eid, depth))
     fd.close()
-    print "LoC = ", str(LoC)
 
 
 def udg_to_datalog(udg):
@@ -497,6 +497,8 @@ def udg_to_datalog(udg):
             write_datalog_edge(n, s)
         for d in udg.nodes[n].get("defs", []):
             write_datalog_def(n, d)
+            if g.nodes[id_map[n]]["ctrltainted"]:
+                write_datalog_ctrldef(n, d)
         for u in udg.nodes[n].get("uses", []):
             write_datalog_use(n, u)
         for k in udg.nodes[n].get("kills", []):
@@ -508,8 +510,9 @@ id_map = {}
 def open_output_files():
     global datalog_fd
     global datalog_edge_fd
+    global datalog_branch_fd
     global datalog_ctrldep_fd
-    global datalog_safebranch_fd
+    global datalog_ctrldef_fd
     global datalog_def_fd
     global datalog_use_fd
     global datalog_source_fd
@@ -522,8 +525,9 @@ def open_output_files():
 
     datalog_fd = open("tmp/facts", "w+")
     datalog_edge_fd = open("tmp/edge.csv", "w+")
+    datalog_branch_fd = open("tmp/branch.csv", "w+")
     datalog_ctrldep_fd = open("tmp/ctrldep.csv", "w+")
-    datalog_safebranch_fd = open("tmp/safebranch.csv", "w+")
+    datalog_ctrldef_fd = open("tmp/ctrldef.csv", "w+")
     datalog_def_fd = open("tmp/def.csv", "w+")
     datalog_use_fd = open("tmp/use.csv", "w+")
     datalog_source_fd = open("tmp/source.csv", "w+")
@@ -877,11 +881,11 @@ def write_control_dependencies(copied_cfg):
             # dep is control dependent on d
             write_datalog_ctrldep(dep, d)
 
-def write_safe_branches(copied_cfg):
+def write_branches(copied_cfg):
     global id_map, g
     for n in copied_cfg:
-        if g.nodes[id_map[n]].get("safeBranch", False):
-            write_datalog_safebranch(n)
+        if "branch" in g.nodes[id_map[n]]:
+            write_datalog_branch(n, g.nodes[id_map[n]]["branch"])
 
 def arrays(args):
     global g
@@ -898,14 +902,13 @@ def arrays(args):
     calc_func_depths(g, entry)
     print "write_bounded_copied_cfg to depth %d" % (depth)
     copied_cfg = nx.MultiDiGraph()
-    #import pdb; pdb.set_trace()
     make_copied_cfg(g, entry, depth, copied_cfg)
     with open("tmp/cfg_exit", "w+") as fd:
         fd.write(str(g.nodes[entry]["exit_id"]))
     add_def_use_to_graph(copied_cfg)
     preprocesses_graph(copied_cfg)
     write_control_dependencies(copied_cfg)
-    write_safe_branches(copied_cfg)
+    write_branches(copied_cfg)
     array_indexes = collect_array_indexes(copied_cfg)
     resolve_array_indexes(copied_cfg)
     handle_arrays(copied_cfg, array_indexes)
