@@ -12,6 +12,7 @@ return toInteger(line.id),ID(new);' | cypher-shell > $DIR/../cypher_id_map
 
 declare -A cypher_id_map
 
+# create a map from the CCFG id to the id given by neo4j
 for l in $( tail -n+2 $DIR/../cypher_id_map | tr -d ' ' ); do
 	new_id=${l/,*/}
 	cypher_id=${l/*,/}
@@ -38,3 +39,27 @@ ID(s) = toInteger(line.start) and
 ID(e) = toInteger(line.end)
 create
 (s)-[:REACHES{var:line.var}]->(e);' | cypher-shell
+
+rm $DIR/../tmp_datadeps.csv
+
+echo "n,d" > $DIR/../tmp_ctrldeps.csv
+IFS=$'\n'
+for l in $( cat tmp/ctrldep.csv ); do
+    IFS=$'\t'
+    arr=($l)
+    n=${cypher_id_map[${arr[0]}]}
+    d=${cypher_id_map[${arr[1]}]}
+    echo "$n,$d" >> $DIR/../tmp_ctrldeps.csv
+done
+IFS=$'\n'
+
+echo 'using periodic commit
+load csv with headers from "file:///home/brandon/joern/projects/extensions/joern-php/src/datalog/tmp_ctrldeps.csv" as line
+match
+(s:CCFG),(e:CCFG)
+where
+ID(s) = toInteger(line.n) and 
+ID(e) = toInteger(line.d)
+create
+(s)-[:CTRLDEP]->(e);' | cypher-shell
+rm $DIR/../cypher_id_map

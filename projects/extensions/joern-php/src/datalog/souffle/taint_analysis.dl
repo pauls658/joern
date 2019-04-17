@@ -21,8 +21,10 @@
 .decl ctrldep(n:number, d:number)
 .decl ctrldef(stmt:number, var:number)
 .decl livectrldef(stmt:number, var:number)
-//.decl taintedCtrldep(n:number)
+.decl taintedCtrldep(n:number)
 .decl tainted_branch(def_stmt:number)
+
+.decl usedctrldep(n:number, d:number)
 
 .input edge(IO=file, filename="tmp/edge.csv")
 .input branch(IO=file, filename="tmp/branch.csv")
@@ -81,10 +83,15 @@ tainted_branch(stmt1) :- use(stmt1, var1), livedef(stmt2, var1, stmt1), branch(s
 
 //taintedCtrldep(stmt) :- tainted_branch(dep), ctrldep(stmt, dep).
 //taintedCtrldep(stmt) :- ctrldep(stmt, dep), taintedCtrldep(dep).
+//ctrldef(stmt, var) :- taintedCtrldep(stmt), def(stmt, var).
 //tainted(stmt) :- taintedCtrldep(stmt).
+
+//usedctrldep(n, d) :- taintedCtrldep(n), ctrldep(n, d).
 
 .output tainted_sink
 .output datadep
 //.output livedef
 //.output livectrldef
 .output tainted_branch
+//.output taintedCtrldep
+//.output usedctrldep

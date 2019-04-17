@@ -155,15 +155,27 @@ class G {
 	]
 
 	public HashSet functionCallWhiteList = [
-		"is_object","is_array",	"is_string", "defined", "define", "dirname", "gettype", "trim", "count", "substr", "strlen", "explode", "preg_split", "strtoupper", "strtolower", "array_change_key_case", "stripslashes", "preg_quote", "htmlspecialchars", "sizeof", "mb_convert_encoding", "is_scalar", "implode", "reset", "get_object_vars", "floor", "sprintf", "rtrim", "strtotime", "is_integer", "date", "mktime", "urlencode", "asort", "is_a", "get_class", "intval"
+		"is_object","is_array",	"is_string", "defined", "define", "dirname", "gettype", "trim", "count", "substr", "strlen", "explode", "preg_split", "strtoupper", "strtolower", "array_change_key_case", "stripslashes", "preg_quote", "htmlspecialchars", "sizeof", "mb_convert_encoding", "is_scalar", "implode", "reset", "get_object_vars", "floor", "sprintf", "rtrim", "strtotime", "is_integer", "date", "mktime", "urlencode", "asort", "is_a", "get_class", "intval", "base64_encode", "mb_substr", "mb_strlen", "parse_url", "strtotime", "array_splice", "array_shift", "strrev"
 	]
 
 	def secondArgIsNonEmptyString(callNode) {
 		def secondArg = g.V(callNode.id()).out("PARENT_OF").has("type", "AST_ARG_LIST").out("PARENT_OF").has("childnum", 1).next()
-		if (secondArg.value("type").equals("string"))
+		if (secondArg.value("type").equals("string")) {
 			return !secondArg.value("code").equals("");
-		else
+		} else if (secondArg.value("type").equals("AST_ARRAY")) {
+			def children = getChildren(secondArg);
+			for (n in children) {
+				def e = n.vertices(Direction.OUT, "PARENT_OF")[0]
+				if (!e.value("type").equals("string")) {
+					return false
+				} else if (e.value("code").equals("")) {
+					return false
+				}
+			}
+			return true
+		} else {
 			return false
+		}
 	}
 
 	def getStaticCallName(callNode) {
@@ -209,9 +221,11 @@ class G {
 		def type = bb.value("type")
 		switch (type) {
 			case "AST_ASSIGN":
+			case "AST_ASSIGN_REF":
 				def rhs = g.V(bb.id()).out("PARENT_OF").has("childnum", 1).next()
 				return isCtrlTainted(rhs)
 			case "AST_ARRAY":
+			case "AST_EXPR_LIST":
 				def children = getChildren(bb)
 				for (child in children) {
 					if (isCtrlTainted(child))
@@ -229,6 +243,7 @@ class G {
 			case "AST_POST_INC":
 			case "AST_PRE_DEC":
 			case "AST_PRE_INC":
+			case "AST_UNARY_OP":
 				def child = getChildren(bb)[0]
 				return isCtrlTainted(child)
 			// cases with two children
@@ -240,6 +255,12 @@ class G {
 			case "AST_ARRAY_ELEM": // part of array( "key" => $var, ... )
 				def children = getChildren(bb)
 				return isCtrlTainted(children[0]) && isCtrlTainted(children[1])
+
+			case "AST_CONDITIONAL": // $v = $b ? $x : $y;
+				def condition = g.V(bb).out("PARENT_OF").has("childnum", 0).next()
+				def s1 = g.V(bb).out("PARENT_OF").has("childnum", 1).next()
+				def s2 = g.V(bb).out("PARENT_OF").has("childnum", 2).next()
+				return isCtrlTainted(s1) && isCtrlTainted(s2) && (getBranchType(condition) == 1)
 			// actual handling for function calls
 			// for exit and entry, 
 			case "arg_entry":
@@ -313,12 +334,21 @@ class G {
 		}
 	}
 
-	def findCtrlTainted(ccfgId) {
-		def actualId = g.V().hasLabel("CCFG").has("id", ccfgId).next().id()
-		g.V(actualId).repeat(__.in("REACHES").simplePath()).until(has("ctrltainted", true)).limit(1).path()
-	}
+	// use findCtrlDefSrc
+	//def findCtrlTainted(ccfgId) {
+	//	def actualId = g.V().hasLabel("CCFG").has("id", ccfgId).next().id()
+	//	g.V(actualId).repeat(__.in("REACHES").simplePath()).until(has("ctrltainted", true)).limit(1).path()
+	//}
 
 	def findNodeLoc(node) {
+		if (node instanceof java.lang.Long)
+			node = g.V(node).next()
+
+		if (!("lineno" in node.keys())) {
+			println "No line number for " + node.value("type") + " node:"
+			println node
+			return
+		}
 		def lineno = node.value("lineno")
 		def fid = (int)node.value("funcid")
 		def fileName = g.V(fid).\
@@ -344,10 +374,12 @@ class G {
 		"is_bool",
 		"is_numeric",
 		"is_float",
-		"is_int",
+		"is_integer",
 		"is_string",
 		"is_object",
-	];
+		"trim",
+		"strlen"
+	]
 
 	public HashSet typeZeroBuiltInFuncs = [
 		"is_a"
@@ -417,7 +449,7 @@ class G {
 
 	// checks if a predicate is of the form:
 	// -   $var == ""
-    // -   $var == {false,true}
+    // -   $var == {false,true,0}
 	def isEmptyComparison(node) {
 		def hasEmptyString = false, hasVar = false
 		def children = getChildren(node)
@@ -506,12 +538,73 @@ class G {
 		curNode++;
 	}
 
-	def test() {
-		def branchNodes = g.V().match(__.as('a').out('FLOWS_TO').as('b'),
-					__.as('a').out('FLOWS_TO').as('c'), 
-					where('b', neq('c'))).\
-				select('a').dedup().toList()
-		return branchNodes.findAll{ isSafeBranch(it) }
+	def reachableBranches(n) {
+		def visited = new HashSet();
+		def branches = new HashSet();
+		def branchesOrder = []
+		def work = []
+		def rets = []
+		work.addAll(n)
+		while (!work.isEmpty()) {
+			def cur = work.pop()
+			if (cur in visited) continue
+			visited.add(cur)
+			def adj = g.V(cur).out("REACHES").toList()
+			for (v in adj) {
+				def origNode = g.V(v.value("orig_id")).next()
+				if (origNode.value("type").equals("AST_RETURN")) {
+					rets += v.id()
+				}
+				if ("branch" in origNode.keys()) {
+					if (!(origNode.id() in branches))
+						branchesOrder += origNode.id()
+					branches.add(origNode.id())
+				}
+				work += v.id()
+			}
+		}
+		return [branches, branchesOrder]
+	}
+
+	def findTheBranches(origID) {
+		def copiedIDs = g.V().has("orig_id", origID).in("CTRLDEP").id().toList()
+		return reachableBranches(copiedIDs)
+	}
+	
+	def addTypesToCCFG() {
+		def ccfgNodes = g.V().hasLabel("CCFG").toList()
+		for (n in ccfgNodes) {
+			def type = g.V(n.value("orig_id")).values("type").next()
+			g.V(n.id()).property("type", type).next()
+		}
+	}
+
+	def findDataflowPath(start, end) {
+		def visited = new HashSet();
+		return g.V(start).repeat(out("REACHES").not(has("type", "AST_FOREACH")).filter{ !(it.get().id() in visited) }.sideEffect{ visited.add(it.get().id()) }).until(has("orig_id", end)).path().limit(1).next()
+	}
+
+	def findCtrlDefSrc(start) {
+		def ccfgNodes = g.V().hasLabel("CCFG").has("orig_id", start).id().toList()
+		for (n in ccfgNodes) {
+			def visited = new HashSet()
+			visited.clear()
+			try {
+				return g.V(n).repeat(__.in("REACHES").simplePath().filter{ !(it.get().id() in visited) }.sideEffect{ visited.add(it.get().id()) }).until(has("ctrltainted", true)).limit(1).path().next()
+			} catch (NoSuchElementException e) {
+
+			}
+		}
+	}
+
+	def test(start, branches) {
+		for (b in branches) {
+			try {
+				return findDataflowPath(start, b)
+			} catch (NoSuchElementException e) {
+
+			}
+		}
 	}
 
 }

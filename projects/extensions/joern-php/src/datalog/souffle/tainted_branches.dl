@@ -78,6 +78,6 @@ tainted_branch(stmt1) :- use(stmt1, var1), livedef(stmt2, var1, stmt1), ctrldef(
 
 .output tainted_sink
 .output datadep
-.output livedef
-.output livectrldef
+//.output livedef
+//.output livectrldef
 .output tainted_branch

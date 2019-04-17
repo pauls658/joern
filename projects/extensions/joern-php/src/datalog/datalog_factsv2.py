@@ -228,12 +228,13 @@ def write_datalog_star(stmt_id, sym):
     global datalog_star_fd
     datalog_star_fd.write("%d\t%s\n" % (stmt_id, sym.final_enc()))
 
-#ret_re = re.compile("[0-9]*_actual_ret")
+# kill the formal returns at the artificial return node
+ret_re = re.compile("[0-9]*_ret")
 def write_datalog_use(stmt_id, sym):
-    global datalog_use_fd, ret_re
+    global datalog_use_fd, ret_re, g, id_map
     datalog_use_fd.write("%d\t%s\n" % (stmt_id, sym.final_enc()))
-    #if ret_re.match(sym.name):
-    #    write_datalog_kill(stmt_id, sym)
+    if ret_re.match(sym.name) and g.nodes[id_map[stmt_id]]["type"] == "return":
+        write_datalog_kill(stmt_id, sym)
 
 def write_datalog_sink(i):
     global out_format
@@ -797,7 +798,8 @@ def collect_array_indexes(g):
     return array_indexes
 
 def resolve_array_indexes(udg):
-    # TODO: resolve array indexes
+    # TODO: resolve array indexes via something like constant
+    # propagation
     # Final step... convert any unresolved indexes to cid_unknown. If a
     # the variable in any index is removed and added as a use to the
     # statement.
@@ -874,7 +876,7 @@ def write_control_dependencies(copied_cfg):
         for d in df:
             ctrldeps[d].append(n)
 
-    ctrldeps = trans_closure(ctrldeps)
+    #ctrldeps = trans_closure(ctrldeps)
 
     for d, deps in ctrldeps.iteritems():
         for dep in deps:
