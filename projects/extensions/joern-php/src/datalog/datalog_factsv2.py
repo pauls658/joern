@@ -23,6 +23,13 @@ def graph_from_json():
         rel_props["label"] = "INTERPROC"
         g.add_edge(int(row[0]), int(row[1]), **rel_props)
 
+    rows = json.load(open("tmp/propogate.json", "rb"))["results"][0]["data"]
+    for row in rows:
+        row = row["row"]
+        rel_props = row[2]
+        rel_props["label"] = "PROPOGATE"
+        g.add_edge(int(row[0]), int(row[1]), **rel_props)
+
     return g
 
 # used for dump_handleable()
@@ -229,12 +236,12 @@ def write_datalog_star(stmt_id, sym):
     datalog_star_fd.write("%d\t%s\n" % (stmt_id, sym.final_enc()))
 
 # kill the formal returns at the artificial return node
-ret_re = re.compile("[0-9]*_ret")
+#ret_re = re.compile("[0-9]*_ret")
 def write_datalog_use(stmt_id, sym):
     global datalog_use_fd, ret_re, g, id_map
     datalog_use_fd.write("%d\t%s\n" % (stmt_id, sym.final_enc()))
-    if ret_re.match(sym.name) and g.nodes[id_map[stmt_id]]["type"] == "return":
-        write_datalog_kill(stmt_id, sym)
+    #if ret_re.match(sym.name) and g.nodes[id_map[stmt_id]]["type"] == "return":
+    #    write_datalog_kill(stmt_id, sym)
 
 def write_datalog_sink(i):
     global out_format
@@ -831,14 +838,41 @@ def resolve_array_indexes(udg):
             data["uses"].clear()
             data["uses"].update(new_syms)
 
+def add_kill_to_dict(data, sym):
+    if "kills" not in data:
+        data["kills"] = set()
+    data["kills"].add(sym)
+
+ret_re = re.compile("[0-9]*_ret")
+act_ret_re = re.compile("[0-9]*_actual_ret")
 def add_kills(udg, array_indexes):
     global g, id_map
+    # first add kills for formal+actual rets on the original graph.
+    # note: the symbols in the orig graph are still strings - not Symbol
+    # objs
+    for n, data in g.nodes(data=True):
+        for u in data.get("uses","").split(";"):
+            if ret_re.match(u) and data["type"] == "return":
+                add_kill_to_dict(data, u)
+            if act_ret_re.match(u):
+                prop_edges = filter(lambda e: e[2]["label"] == "PROPOGATE", g.out_edges(nbunch=n, data=True))
+                if prop_edges:
+                    for s1, e1, d1 in prop_edges:
+                        add_kill_to_dict(g.nodes[e1], u)
+                else:
+                    add_kill_to_dict(data, u)
+
+    # now add kills to the copied graph
     for n, data in udg.nodes(data=True):
         if "kills" not in data:
             data["kills"] = set()
+        # kill the function's local parameters
         if g.nodes[id_map[n]]["type"] == "CFG_FUNC_EXIT":
             for d in data.get("defs", []):
                 data["kills"].add(Symbol(d.enc))
+        # add the kills we added directly to the original graph
+        for k in g.nodes[id_map[n]].get("kills", []):
+            data["kills"].add(Symbol(k))
 #        else:
 #            for d in data.get("defs", []):
 #                if not d.isArray and not d.isField and d.name in array_indexes:
