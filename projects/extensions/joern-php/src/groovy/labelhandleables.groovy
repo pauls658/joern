@@ -155,7 +155,7 @@ class G {
 	]
 
 	public HashSet functionCallWhiteList = [
-		"is_object","is_array",	"is_string", "defined", "define", "dirname", "gettype", "trim", "count", "substr", "strlen", "explode", "preg_split", "strtoupper", "strtolower", "array_change_key_case", "stripslashes", "preg_quote", "htmlspecialchars", "sizeof", "mb_convert_encoding", "is_scalar", "implode", "reset", "get_object_vars", "floor", "sprintf", "rtrim", "strtotime", "is_integer", "date", "mktime", "urlencode", "asort", "is_a", "get_class", "intval", "base64_encode", "mb_substr", "mb_strlen", "parse_url", "strtotime", "array_splice", "array_shift", "strrev"
+		"is_object","is_array",	"is_string", "defined", "define", "dirname", "gettype", "trim", "count", "substr", "strlen", "explode", "preg_split", "strtoupper", "strtolower", "array_change_key_case", "stripslashes", "preg_quote", "htmlspecialchars", "sizeof", "mb_convert_encoding", "is_scalar", "implode", "reset", "get_object_vars", "floor", "sprintf", "rtrim", "strtotime", "is_integer", "date", "mktime", "urlencode", "asort", "is_a", "get_class", "intval", "base64_encode", "mb_substr", "mb_strlen", "parse_url", "strtotime", "array_splice", "array_shift", "strrev", "preg_match"
 	]
 
 	def secondArgIsNonEmptyString(callNode) {
@@ -194,7 +194,7 @@ class G {
 		if ("name" in callNode.keys())
 			callName = callNode.value("name")
 		else
-			return true // statically unknown method call
+			return false // statically unknown method call
 
 		switch (callType) {
 			case "AST_METHOD_CALL":
@@ -260,7 +260,7 @@ class G {
 				def condition = g.V(bb).out("PARENT_OF").has("childnum", 0).next()
 				def s1 = g.V(bb).out("PARENT_OF").has("childnum", 1).next()
 				def s2 = g.V(bb).out("PARENT_OF").has("childnum", 2).next()
-				return isCtrlTainted(s1) && isCtrlTainted(s2) && (getBranchType(condition) == 1)
+				return isCtrlTainted(s1) && isCtrlTainted(s2) && (getBranchType(condition) == 1 || getBranchType(condition) == 0)
 			// actual handling for function calls
 			// for exit and entry, 
 			case "arg_entry":
@@ -291,6 +291,7 @@ class G {
 				// node
 				return false;
 			// obvious/not interesting cases go here
+			case "AST_ISSET":
 			case "AST_ENCAPS_LIST":
 			case "AST_PARAM":
 			case "CFG_FUNC_ENTRY":
@@ -324,13 +325,13 @@ class G {
 
 			// maybe should consider assign in stmt
 			// if BB is AST_CALL, it is a call where return is ignored
-			if ("branch" in bb.keys() && (bb.value("branch") == true) || bb.value("type").equals("AST_CALL")) { 
+			//if ("branch" in bb.keys() && (bb.value("branch") == true) || bb.value("type").equals("AST_CALL")) { 
 				g.V(bb.id()).property('ctrltainted', false).next()
-			} else if (isCtrlTainted(bb)) {
-				g.V(bb.id()).property('ctrltainted', true).next()
-			} else {
-				g.V(bb.id()).property('ctrltainted', false).next()
-			}
+			//} else if (isCtrlTainted(bb)) {
+			//	g.V(bb.id()).property('ctrltainted', true).next()
+			//} else {
+			//	g.V(bb.id()).property('ctrltainted', false).next()
+			//}
 		}
 	}
 
@@ -377,8 +378,10 @@ class G {
 		"is_integer",
 		"is_string",
 		"is_object",
+		"function_exists",
 		"trim",
-		"strlen"
+		"strlen",
+		"count"
 	]
 
 	public HashSet typeZeroBuiltInFuncs = [
@@ -395,7 +398,7 @@ class G {
 			def funcName = node.value("name")
 			
 			if (typeOneBuiltInFuncs.contains(funcName))
-				return 1
+				return 0
 			else if (typeZeroBuiltInFuncs.contains(funcName))
 				return 0
 			else
@@ -482,16 +485,19 @@ class G {
 			case "AST_BINARY_OP":
 				def flag = node.value("flags")
 				if (logicalEquality.any{flag.contains(it)}) {
-					return (isEmptyComparison(node) ? 1 : 2)
+					return (isEmptyComparison(node) ? 0 : 2)
 				} else if (logicalConnectives.any{flag.contains(it)}) {
 					def children = getChildren(node)
 					return Integer.max(getBranchType(children[0]), getBranchType(children[1]))
 				} else {
 					return 2
 				}
+			case "AST_ASSIGN":
+				def rhs = g.V(node.id()).out("PARENT_OF").has("childnum", 1).next()
+				return getBranchType(rhs)
 			case "AST_EMPTY":
 			case "AST_ISSET":
-				return 1
+				return 0
 			case "AST_CALL":
 			case "AST_STATIC_CALL":
 			case "AST_METHOD_CALL":
@@ -499,9 +505,55 @@ class G {
 				return getFuncType(node)
 			case "AST_VAR": // if ($var)
 			case "AST_PROP": // if ($o->var)
-				return 1;
+			case "AST_DIM":
+				return 0;
 			default:
 				return 2;
+		}
+	}
+
+	def callAnalysis() {
+		// first label the things that give a var a type:
+		def tassigns = g.V().has("type", "AST_ASSIGN")\
+				.where(and(
+					out("PARENT_OF").has("childnum", 0).has("type", "AST_VAR"),
+					out("PARENT_OF").has("childnum", 1).has("type", "AST_NEW"))).toList()
+		for (n in tassigns) {
+			def typeName = g.V(n.id()).out("PARENT_OF").has("childnum", 1).next().value("name")
+			g.V(n.id()).property("givesType", typeName).next();
+		}
+		
+		def methodCalls = g.V().has("type", "AST_METHOD_CALL").where(out("CALLS").count().is(gt(1))).toList()
+		//def methodCalls = [g.V(221174).next()]
+		for (c in methodCalls) {
+			def var = g.V(c.id()).in("CALL_ID").has("childnum", -1).next().value("uses")
+			def defs = g.V().has("defs", var).toList()
+			//println "var: " + var + ", defs" + defs
+			// if all defs for this var give a type, and there is only one type, then we can resolve the call
+			def varType = null
+			for (d in defs) {
+				if ("givesType" in d.keys()) {
+					if (varType == null) {
+						varType = d.value("givesType")
+					} else {
+						varType = null
+						break
+					}
+				} else {
+					varType = null
+					break
+				}
+			}
+
+			// remove outgoing interproc edges that do not match the type
+			if (varType != null) {
+				//println "Found vartype for: " + c.value("name") + " at lineno " + c.value("lineno")
+				// make sure we find at least one implementation... otherwise we probably did something wrong
+				if (g.V(c.id()).out("CALLS").has("classname", varType).toList().size() > 0) {
+					println "Removing extra call edges for: " + c.value("name") + " at lineno " + c.value("lineno")
+					g.V(c.id()).in("CALL_ID").outE("INTERPROC").where(__.not(inV().has("classname", varType))).drop().toList()
+				}
+			}
 		}
 	}
 
@@ -613,6 +665,7 @@ o = new G()
 if (args.size() == 0) {
 	o.labelBranches()
 	o.labelHandleableAndCtrlTainted()
+	o.callAnalysis()
 	o.g.graph.tx().commit()
 	o.g.graph.close()
 }
