@@ -368,7 +368,7 @@ class G {
 
 	}
 
-	public HashSet typeOneBuiltInFuncs = [
+	public HashSet typeZeroBuiltInFuncs = [
 		"is_array",
 		"is_object",
 		"is_string",
@@ -381,11 +381,10 @@ class G {
 		"function_exists",
 		"trim",
 		"strlen",
-		"count"
-	]
-
-	public HashSet typeZeroBuiltInFuncs = [
-		"is_a"
+		"count",
+		"is_a",
+		"each",
+		"file_exists"
 	]
 
 	def getFuncType(node) {
@@ -393,13 +392,15 @@ class G {
 		if (node.edges(Direction.OUT, "CALLS")[0] != null) {
 			// we have implementation, so this will be a type 1
 			// branch
-			return 1
+			return 0
 		} else {
 			def funcName = node.value("name")
 			
-			if (typeOneBuiltInFuncs.contains(funcName))
+			if (typeZeroBuiltInFuncs.contains(funcName))
 				return 0
 			else if (typeZeroBuiltInFuncs.contains(funcName))
+				return 0
+			else if ((funcName.equals("stristr") || funcName.equals("strstr")) && secondArgIsNonEmptyString(node))
 				return 0
 			else
 				return 2
@@ -422,16 +423,35 @@ class G {
 		"BINARY_IS_GREATER_OR_EQUAL"
 	]
 
+	
+
 	def getConstName(constNode) {
 		return g.V(constNode.id()).out("PARENT_OF").out("PARENT_OF").properties("code").next().value()
 	}
 
+	public HashSet isVarFuncWhitelist = [
+		"strtolower",
+		"strtoupper",
+		"substr",
+		"count",
+		"trim"
+	]
+
 	def isVar(node) {
 		def type = node.value("type")
 		switch (type) {
+			case "AST_UNARY_OP":
+				return isVar(getChildren(node)[0])
+			case "AST_CALL":
+				if (node.value("name") in isVarFuncWhitelist || g.V(node.id()).out("CALLS").toList().size() > 0)
+					return true
+				else if (node.value("name") in ["strstr","stristr"] && secondArgIsNonEmptyString(node))
+					return true
+				else
+					return false
 			case "AST_VAR":
-				return true;
 			case "AST_PROP":
+			case "AST_DIM":
 				return true;
 			default:
 				return false;
@@ -439,6 +459,10 @@ class G {
 	}
 
 	def isEmpty(node) {
+		if (node.value("type").equals("AST_UNARY_OP")) {
+			return isEmpty(getChildren(node)[0])
+		}
+
 		if (node.value("type").equals("string")) {
 			return node.value("code").equals("")
 		} else if (node.value("type").equals("AST_CONST")) {
@@ -474,21 +498,71 @@ class G {
 
 		return hasEmptyString && hasVar
 	}
+
+	def constTypes = [
+		"string",
+		"AST_CONST",
+		"integer",
+		"NULL"
+	]
+	def isConst(node) {
+		if (node.value("type").equals("AST_UNARY_OP")) {
+			return isConst(getChildren(node)[0])
+		}
+		return node.value("type") in constTypes
+	}
+
+	def isConstComparsion(node) {
+		def hasConstString = false, hasVar = false
+		def children = getChildren(node)
+		if( !(children[0] != null && children[1] != null)) {
+			println node.value("flags")
+			return false
+		}
+		if (isVar(children[0])) {
+			hasVar = true
+		} else if (isConst(children[0])){
+			hasConstString = true
+		}
+		if (isVar(children[1])) {
+			hasVar = true
+		} else if (isConst(children[1])){
+			hasConstString = true
+		}
+		return hasConstString && hasVar
+	}
+
+	def getSwitchBranchType(node) {
+		return g.V(node.id()).out("PARENT_OF").has("type", "AST_SWITCH_LIST").out("PARENT_OF").out("PARENT_OF").has("childnum", 0).filter{ !isConst(it.get()) && !(it.get().value("type").equals("AST_CALL") && it.get().value("name") in typeZeroBuiltInFuncs) }.hasNext() ? 2 : 0
+	}
 	
 	def getBranchType(node) {
+		// special case 
+		def parent = g.V(node.id()).in("PARENT_OF").next()
+		if (parent.value("type").equals("AST_SWITCH")) {
+			return getSwitchBranchType(parent)
+		}
 		switch(node.value("type")) {
 			case "AST_FOREACH":
 				return 0;
+			case "AST_EXPR_LIST":
+				def children = getChildren(node)
+				def ret = 0
+				for (child in children) {
+					ret = Integer.max(ret, getBranchType(child))
+				}
+				return ret
 			case "AST_UNARY_OP":
 				def child = node.vertices(Direction.OUT, "PARENT_OF")[0]
 				return getBranchType(child)
 			case "AST_BINARY_OP":
 				def flag = node.value("flags")
-				if (logicalEquality.any{flag.contains(it)}) {
-					return (isEmptyComparison(node) ? 0 : 2)
-				} else if (logicalConnectives.any{flag.contains(it)}) {
+				def hasAssign = g.V(node.id()).out("PARENT_OF").has("type", "AST_ASSIGN").toList().size() > 0
+				if (logicalConnectives.any{flag.contains(it)} || hasAssign) {
 					def children = getChildren(node)
 					return Integer.max(getBranchType(children[0]), getBranchType(children[1]))
+				} else if (logicalEquality.any{flag.contains(it)}) {
+					return (isEmptyComparison(node) || isConstComparsion(node) ? 0 : 2)
 				} else {
 					return 2
 				}
@@ -506,6 +580,7 @@ class G {
 			case "AST_VAR": // if ($var)
 			case "AST_PROP": // if ($o->var)
 			case "AST_DIM":
+			case "AST_CONST":
 				return 0;
 			default:
 				return 2;
@@ -649,14 +724,9 @@ class G {
 		}
 	}
 
-	def test(start, branches) {
-		for (b in branches) {
-			try {
-				return findDataflowPath(start, b)
-			} catch (NoSuchElementException e) {
-
-			}
-		}
+	def test() {
+		loadNodeIds()
+		nodeIds = nodeIds.findAll{ getBranchType(g.V(it).next()) == 2 }
 	}
 
 }
