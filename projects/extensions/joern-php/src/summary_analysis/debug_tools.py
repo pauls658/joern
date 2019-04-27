@@ -7,44 +7,6 @@ def load_sinks():
     echos.update(json.load(open("tmp/sinks.json", "rb"))["results"][0]["data"][0]["row"][0])
     return echos
 
-def load_kills():
-    fd = open("tmp/kill.csv", "r")
-    kills = defaultdict(list)
-    for line in fd:
-        n, var = map(int, line.strip().split())
-        kills[n].append(var)
-    fd.close()
-    return kills
-
-def load_defs():
-    fd = open("tmp/def.csv", "r")
-    defs = defaultdict(list)
-    for line in fd:
-        n, var = line.strip().split("\t")
-        n = int(n)
-        defs[n].append(var)
-    fd.close()
-    return defs
-
-def load_uses():
-    fd = open("tmp/use.csv", "r")
-    uses = defaultdict(list)
-    for line in fd:
-        n, var = line.strip().split("\t")
-        n = int(n)
-        uses[n].append(var)
-    fd.close()
-    return uses
-
-def load_ctrldefs():
-    fd = open("tmp/ctrldef.csv", "rb")
-    ctrldefs = defaultdict(list)
-    for line in fd:
-        n, var = line.strip().split("\t")
-        n = int(n)
-        ctrldefs[n].append(var)
-    fd.close()
-    return ctrldefs
 
 def load_data_deps():
     fd = open("datadep.csv", "r")

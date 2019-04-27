@@ -29,7 +29,8 @@ def load_var_map():
     for line in fd:
         i, var_name = line.split(",")
         i = int(i)
-        var_map[i] = var_name.strip()
+        var_name = var_name.strip()
+        var_map[i] = var_name
         rev_var_map[var_name] = i
     return var_map, rev_var_map
 
@@ -41,3 +42,43 @@ def load_cypher_graph_nodes():
         i = int(row["id"])
         nodes[i] = row
     return nodes
+
+def load_kills():
+    fd = open("tmp/kill.csv", "r")
+    kills = defaultdict(list)
+    for line in fd:
+        n, var = map(int, line.strip().split())
+        kills[n].append(var)
+    fd.close()
+    return kills
+
+def load_defs():
+    fd = open("tmp/def.csv", "r")
+    defs = defaultdict(list)
+    for line in fd:
+        n, var = line.strip().split("\t")
+        n = int(n)
+        defs[n].append(var)
+    fd.close()
+    return defs
+
+def load_uses():
+    fd = open("tmp/use.csv", "r")
+    uses = defaultdict(list)
+    for line in fd:
+        n, var = line.strip().split("\t")
+        n = int(n)
+        uses[n].append(var)
+    fd.close()
+    return uses
+
+def load_ctrldefs():
+    fd = open("tmp/ctrldef.csv", "rb")
+    ctrldefs = defaultdict(list)
+    for line in fd:
+        n, var = line.strip().split("\t")
+        n = int(n)
+        ctrldefs[n].append(var)
+    fd.close()
+    return ctrldefs
+

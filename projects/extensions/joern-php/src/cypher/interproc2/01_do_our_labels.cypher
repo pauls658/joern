@@ -9,6 +9,7 @@ match (a{type:"AST_CALL"})-[r:PARENT_OF]->(b{childnum:0})-[:PARENT_OF]->(n) set 
 match (A{type:"AST_METHOD_CALL"})-[:PARENT_OF]->(n{childnum:1}) set A.name = n.code;
 match (A{type:"AST_STATIC_CALL"})-[:PARENT_OF]->(n{childnum:1}) set A.name = n.code;
 match (A{type:"AST_NEW"})-[:PARENT_OF]->({childnum:0})-[:PARENT_OF]->(n) set A.name = n.code;
+match (a:FUNCCALL) where not exists(a.name) set a.name = "";
 
 // label function declarations
 match (a:AST) where a.type in ["AST_FUNC_DECL", "AST_METHOD"] or (a)-[:PARENT_OF]->(:AST{type:"AST_PARAM_LIST"}) set a:FUNCDECL;

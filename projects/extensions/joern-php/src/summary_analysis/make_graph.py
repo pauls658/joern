@@ -1,6 +1,6 @@
 import json, sys, re
 import networkx as nx
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 
 def graph_from_json():
     g = nx.MultiDiGraph()
@@ -69,7 +69,7 @@ def preprocesses_graph(graph):
         # don't delete CFG exit or func entries
         if "uses" not in d and "defs" not in d \
                 and n != 1 \
-                and g.nodes[id_map[n]]["type"] != "CFG_FUNC_ENTRY":
+                and g.nodes[id_map[n]]["type"] not in ["CFG_FUNC_EXIT", "CFG_FUNC_ENTRY", "AST_EXIT"]:
             remove_node(graph, n)
 
     print "Reduced graph to %0.2f%% original size" % ((float(graph.order())/float(orig_node_count))*100)
@@ -203,10 +203,23 @@ def profile_memory():
 
 def add_graph_edge(start, end, copied_cfg):
     global g, id_map
-    if g.nodes[id_map[start]]["type"] == "AST_EXIT":
-        copied_cfg.add_edge(start, 1) # 1 is always the CFG exit
-    else:
-        copied_cfg.add_edge(start, end)
+    copied_cfg.add_edge(start, end)
+
+def write_datalog_function(start, end):
+    global datalog_function_fd, g, id_map
+    datalog_function_fd.write("%d\t%d\t%d\n" % (start, end, g.nodes[id_map[start]]["funcid"]))
+
+def write_datalog_call(call_site, call_target):
+    global datalog_call_fd
+    datalog_call_fd.write("%d\t%d\n" % (call_site, call_target))
+
+def write_datalog_exit(stmt):
+    global datalog_exit_fd
+    datalog_exit_fd.write("%d\n" % (stmt))
+
+def write_datalog_func_param(n, sym):
+    global datalog_param_fd
+    datalog_param_fd.write("%d\t%d\n" % (n, sym.final_enc()))
 
 def write_datalog_edge(start, end):
     global datalog_edge_fd
@@ -293,7 +306,6 @@ def write_datalog_nonkilling_stmt(stmt_id, copied_cfg):
 def add_def_use_to_graph(copied_cfg):
     global idc, id_map
     global stmt_defs, stmt_uses
-
     for i in range(0, idc): # idc itself has not been used yet
         orig_id = id_map[i]
         for d in stmt_defs.get(orig_id, []):
@@ -370,10 +382,20 @@ def calc_func_depths(g, func_entry, cur_depth=0, call_stack=set()):
     call_stack.remove(func_entry)
     return max_call_depth
 
+# call_stack: {func entry -> (translated entry, translated exit)}
+# s: func entry
+#def handle_mutual_recursion(copied_cfg, call_stack, s):
+#    calls = list(call_stack.keys())
+#    cc = calls[calls.index(s):]
+#    for component in cc:
+
 
 # func entry -> (entry, exit)
 last_created = {}
-def make_copied_cfg(g, func_entry, max_depth, copied_cfg, call_stack={}):
+# the order in which we should process the functions
+func_order = []
+funcs_visited = set()
+def make_copied_cfg(g, func_entry, max_depth, copied_cfg, call_stack=OrderedDict()):
     global idc, last_created, id_map, func_depth
     if func_depth[func_entry] >= max_depth and func_entry in last_created:
         # no copy
@@ -416,6 +438,10 @@ def make_copied_cfg(g, func_entry, max_depth, copied_cfg, call_stack={}):
                     idc += 1
 
                 if s in call_stack: 
+                    if len(call_stack) > 0 and s != next(reversed(call_stack)):
+                        print "Mutual Recurion: " + g.nodes[s]["name"]
+                        print ",".join(map(lambda k: g.nodes[k]["name"], call_stack.keys()))
+                        #handle_mutual_recursion(copied_cfg, call_stack, s)
                     # recursion
                     add_graph_edge(id_translation[cur], call_stack[s][0], copied_cfg)
                     add_graph_edge(call_stack[s][1], id_translation[arg_exit], copied_cfg)
@@ -425,8 +451,12 @@ def make_copied_cfg(g, func_entry, max_depth, copied_cfg, call_stack={}):
                 else:
                     # regular function call
                     call_entry, call_exit = make_copied_cfg(g, s, max_depth, copied_cfg)
-                    add_graph_edge(id_translation[cur], call_entry, copied_cfg)
-                    add_graph_edge(call_exit, id_translation[arg_exit], copied_cfg)
+                    summary_id = idc
+                    id_map[summary_id] = s
+                    idc += 1
+                    add_graph_edge(id_translation[cur], summary_id, copied_cfg)
+                    add_graph_edge(summary_id, id_translation[arg_exit], copied_cfg)
+                    copied_cfg.nodes[summary_id]["calls"] = call_entry
 
                 # the only way to the arg exit is through the function,
                 # so in either case we want to add it
@@ -444,6 +474,10 @@ def make_copied_cfg(g, func_entry, max_depth, copied_cfg, call_stack={}):
                 # we have visited s, or it is the func_entry/exit, in
                 # either case, do not continue
                 add_graph_edge(id_translation[cur], id_translation[s], copied_cfg)
+
+    if id_translation[func_entry] not in funcs_visited:
+        funcs_visited.add(id_translation[func_entry])
+        write_datalog_function(id_translation[func_entry], id_translation[func_exit])
 
     call_stack.pop(func_entry)
     return id_translation[func_entry], id_translation[func_exit]
@@ -519,14 +553,21 @@ def udg_to_datalog(udg):
         for k in udg.nodes[n].get("kills", []):
             write_datalog_kill(n, k)
         for param in udg.nodes[n].get("func_params", []):
-            write_dat
-
+            write_datalog_func_param(n, param)
+        if "calls" in udg.nodes[n]:
+            write_datalog_call(n, udg.nodes[n]["calls"])
+        if g.nodes[id_map[n]]["type"] == "AST_EXIT":
+            write_datalog_exit(n)
 idc = 0
 # copied id -> orig id
 id_map = {}
 def open_output_files():
     global datalog_fd
     global datalog_edge_fd
+    global datalog_param_fd
+    global datalog_function_fd
+    global datalog_call_fd
+    global datalog_exit_fd
     global datalog_branch_fd
     global datalog_ctrldep_fd
     global datalog_ctrldef_fd
@@ -542,6 +583,10 @@ def open_output_files():
 
     datalog_fd = open("tmp/facts", "w+")
     datalog_edge_fd = open("tmp/edge.csv", "w+")
+    datalog_param_fd = open("tmp/param.csv", "w+")
+    datalog_function_fd = open("tmp/function.csv", "w+")
+    datalog_call_fd = open("tmp/call.csv", "w+")
+    datalog_exit_fd = open("tmp/exit.csv", "w+")
     datalog_branch_fd = open("tmp/branch.csv", "w+")
     datalog_ctrldep_fd = open("tmp/ctrldep.csv", "w+")
     datalog_ctrldef_fd = open("tmp/ctrldef.csv", "w+")
@@ -559,43 +604,6 @@ g = None
 copied_funcs = 0
 unique_funcs = set()
 out_format = "souffle"
-def testcases():
-    global datalog_fd, copied_funcs
-    global g
-
-    load_sinks()
-    load_testcase_sinks()
-    load_sources()
-    load_def_use_info()
-    g = graph_from_json()
-    entries = get_all_toplevel_entrys(g)
-    for entry in entries:
-        write_bounded_copied_cfg(g, entry, 1)
-    add_def_use_to_graph()
-    write_datalog_sinks_and_sources()
-    save_maps()
-
-    datalog_fd.close()
-
-def debug():
-    global datalog_fd, copied_funcs
-    global g
-
-    load_sinks()
-    load_testcase_sinks()
-    load_sources()
-    load_def_use_info()
-    g = graph_from_json()
-    entry = sqmail_entries(g)[0][0]
-    depth = 6
-    print "write_bounded_copied_cfg to depth %d" % (depth)
-    write_bounded_copied_cfg(g, entry, depth)
-    add_def_use_to_graph()
-    write_datalog_sinks_and_sources()
-    save_maps()
-
-    datalog_fd.close()
-
 def write_handleable_info():
     global id_map,g
     fd = open("tmp/handleable.csv", "w+")
@@ -603,31 +611,6 @@ def write_handleable_info():
     for new, orig in id_map.iteritems():
         fd.write("%d,%d\n" % (new, g.nodes[orig]["handleable"]))
     fd.close()
-
-def main(args):
-    global datalog_fd, copied_funcs
-    global g
-    file_name = args[0]
-    open_output_files()
-    load_sinks()
-    load_sources()
-    load_def_use_info()
-    g = graph_from_json()
-    preprocesses_graph(g)
-    entry = sqmail_entries(g, file_name)[0][0]
-    calc_func_depths(g, entry)
-    depth = 6
-    print "write_bounded_copied_cfg to depth %d" % (depth)
-    make_copied_cfg(g, entry, depth)
-    with open("tmp/cfg_exit", "w+") as fd:
-        fd.write(str(g.nodes[entry]["exit_id"]))
-    add_def_use_to_graph()
-    write_datalog_sinks_and_sources()
-
-    save_maps()
-    write_handleable_info()
-
-    datalog_fd.close()
 
 indexes = {}
 def make_graph_indexes(g):
@@ -639,22 +622,23 @@ def make_graph_indexes(g):
 def handle_arrays(udg, array_indexes):
     global id_map
     new_syms = set()
-    import pdb; pdb.set_trace()
     for n, data in udg.nodes(data=True):
         """
         Hack for putting in params.
         """
         new_syms.clear()
-        if g.nodes[id_map[n]]["type"] == "CFG_FUNC_ENTRY":
+        if "calls" not in udg.nodes[n] and g.nodes[id_map[n]]["type"] == "CFG_FUNC_ENTRY":
             func_params = g.nodes[id_map[n]].get("func_params", None)
             if func_params: 
                 for param in func_params.split(";"):
-                    if param in array_indexes:
+                    if param in array_indexes: 
+                        # note that this does not need to be a stardef
+                        # because it always defines the whole array
                         new_syms.add(Symbol(param + "[" + Symbol.unknown_index))
-                else:
-                    new_syms.add(Symbol(param))
-            data["params"] = set()
-            data["params"].update(new_syms)
+                    else:
+                        new_syms.add(Symbol(param))
+            data["func_params"] = set()
+            data["func_params"].update(new_syms)
 
         new_syms.clear()
         for d in data.get("defs", []):
@@ -955,7 +939,7 @@ def write_branches(copied_cfg):
 def arrays(args):
     global g
     file_name = args[0]
-    depth = int(args[1])
+    depth = 0
 
     open_output_files()
     load_sinks()
@@ -965,7 +949,6 @@ def arrays(args):
     g = graph_from_json()
     entry = sqmail_entries(g, file_name)[0][0]
     calc_func_depths(g, entry)
-    print "write_bounded_copied_cfg to depth %d" % (depth)
     copied_cfg = nx.MultiDiGraph()
     make_copied_cfg(g, entry, depth, copied_cfg)
     with open("tmp/cfg_exit", "w+") as fd:
@@ -997,9 +980,7 @@ if __name__ == "__main__":
     else:
         cmd = sys.argv[1]
     cmds = {
-            "main" : main,
             "func_depths" : write_func_depths,
-            "debug" : debug,
             "handleable" : dump_handleable,
             "arrays" : arrays
     }

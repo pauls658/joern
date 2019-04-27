@@ -598,7 +598,7 @@ class G {
 			g.V(n.id()).property("givesType", typeName).next();
 		}
 		
-		def methodCalls = g.V().has("type", "AST_METHOD_CALL").where(out("CALLS").count().is(gt(1))).toList()
+		def methodCalls = g.V().has("type", "AST_METHOD_CALL").has("name").where(out("CALLS").count().is(gt(1))).toList()
 		//def methodCalls = [g.V(221174).next()]
 		for (c in methodCalls) {
 			def var = g.V(c.id()).in("CALL_ID").has("childnum", -1).next().value("uses")
@@ -608,7 +608,7 @@ class G {
 			def varType = null
 			for (d in defs) {
 				if ("givesType" in d.keys()) {
-					if (varType == null) {
+					if (varType == null || varType.equals(d.value("givesType"))) {
 						varType = d.value("givesType")
 					} else {
 						varType = null
@@ -721,6 +721,30 @@ class G {
 			} catch (NoSuchElementException e) {
 
 			}
+		}
+	}
+
+	HashSet sources;
+	def findPathToSource(start) {
+		sources = new HashSet()
+		def fpath = "/home/brandon/joern/projects/extensions/joern-php/src/datalog/tmp/source.csv"
+		File f = new File(fpath)
+		def lines = f.readLines()
+		for (l in lines) {
+			sources.add(Integer.parseInt(l))
+		}
+		def ccfgNodes = g.V().hasLabel("CCFG").has("orig_id", start).id().toList()
+		for (n in ccfgNodes) {
+			println "Processing: " + n
+			def visited = new HashSet()
+			visited.clear()
+			try {
+				return g.V(n).repeat(__.in("REACHES").filter{ !(it.get().id() in visited) }.sideEffect{ visited.add(it.get().id()) }).until(__.filter{ ((int)it.get().value("id")) in sources }).limit(1).path().next()
+				//g.V(n).repeat(__.in("REACHES").simplePath().filter{ !(it.get().id() in visited) }.sideEffect{ visited.add(it.get().id()) }).hasNext()
+			} catch (NoSuchElementException e) {
+
+			}
+			return visited
 		}
 	}
 
