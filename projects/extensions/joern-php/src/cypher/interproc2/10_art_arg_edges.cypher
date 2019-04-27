@@ -97,11 +97,11 @@ p=(top:FUNCCALL)-[:PARENT_OF]->(alist:AST{type:"AST_ARG_LIST"})-[:PARENT_OF]->(a
 where 
 single(n in tail(nodes(p)) where n:FUNCCALL) // make sure we only deal with one level of nested call
 
-// handle case where return value of a function is the calling object
-match (a{type:"AST_METHOD_CALL"})<-[:ASSOC]-(entry{type:"arg_entry", childnum:-1}) where not exists(a.uses) set entry.uses = toString(a.id) + "_actual_ret";
-
 create 
 (ret)-[:RET_DEF]->(assoc_arg);
+
+// handle case where return value of a function is the calling object
+match (a{type:"AST_METHOD_CALL"})<-[:ASSOC]-(entry{type:"arg_entry", childnum:-1}) where not exists(a.uses) set entry.uses = toString(a.id) + "_actual_ret";
 
 
 // delete the deleted edges
