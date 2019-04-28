@@ -310,7 +310,8 @@ def do_taint_analysis():
     work = OrderedDict()
     for s in SOURCE:
         func = in_func[s]
-        work[func] = set()
+        if func not in work:
+            work[func] = set()
         for d in DEF[s]:
             work[func].add(((d, (d, s) in STARDEF, s), s))
 
