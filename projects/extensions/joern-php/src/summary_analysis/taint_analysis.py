@@ -1,6 +1,6 @@
 from collections import defaultdict, OrderedDict
 from common import *
-import re
+import re, sys
 from make_graph import Symbol
 
 pred = defaultdict(list) # AKA parent
@@ -28,6 +28,12 @@ CALLS = {}
 # {func start -> [caller]}
 CALLEEOF = defaultdict(list)
 
+# {node -> branch type}
+BRANCH = {}
+
+# {branch -> [dependent node]}
+CTRLDEP = defaultdict(list)
+
 # set(stmt)
 EXITS = set()
 ECHO = set()
@@ -44,6 +50,9 @@ var_map = None
 reverse_var_map = None
 id_map = None
 reverse_id_map = None
+
+
+output = {}
 
 class Summary():
     def __init__(self, start, end):
@@ -101,8 +110,18 @@ class Summary():
         self.input_vars.difference_update(not_our_vars)
         self.input_vars.update(func_params[self.start])
 
+
+
     # live_var: (var name, star def, loc)
     def gen_set_for_var(self, live_var):
+        if live_var == "*":
+            # special case: everything is tainted
+            if "*" not in self.summarries_for_vars:
+                res, echos = summarize_var_for_region(None, (self.start, self.end), everything_is_tainted=True)
+                self.summarries_for_vars["*"] = res
+                self.tainted_echos_for_vars["*"] = echos
+            return self.summarries_for_vars["*"], self.tainted_echos_for_vars["*"]
+
         if live_var[0] not in self.input_vars:
             return set(), set()
         elif (live_var[0], live_var[1]) not in self.summarries_for_vars:
@@ -121,7 +140,7 @@ class Summary():
 
 def load_graph():
     global pred, succ, var_map, reverse_var_map, id_map, reverse_id_map, func_params, function, funcids, in_func
-    global DEF, STARDEF, USE, KILLS, NOKILL, CALLS, CALLEEOF, EXITS, ECHO, SOURCE
+    global DEF, STARDEF, USE, KILLS, NOKILL, CALLS, CALLEEOF, EXITS, ECHO, SOURCE, CTRLDEP
 
     fd = open("tmp/edge.csv", "rb")
     for line in fd:
@@ -188,6 +207,18 @@ def load_graph():
         func_params[func].append(param)
     fd.close()
 
+    fd = open("tmp/branch.csv", "rb")
+    for line in fd:
+        n, branch_type = map(int, line.strip().split("\t"))
+        BRANCH[n] = branch_type
+    fd.close()
+
+    fd = open("tmp/ctrldep.csv", "rb")
+    for line in fd:
+        n, branch = map(int, line.strip().split("\t"))
+        CTRLDEP[branch].append(n)
+    fd.close()
+
     fd = open("tmp/function.csv", "rb")
     for line in fd:
         start, end, funcid = map(int, line.strip().split("\t"))
@@ -235,29 +266,61 @@ def IN_minus_KILL(in_set, n):
             )
     )
 
+def add_succ(cur, changed, all_nodes, region):
+    global succ
+    if cur != region[1]:
+        changed.update(succ[cur])
+    else:
+        # same hack to handle recursion...
+        changed.update(filter(lambda x: x in all_nodes, succ[cur]))
+
+def make_all_defs_live(n):
+    global DEF, STARDEF
+    tmp = set()
+    for d in DEF[n]:
+        tmp.add((d, (d, n) in STARDEF, n))
+    return tmp
+
 # var: (var name, star def, loc) OR None
 # region: (region start, region end)
 # init_OUT: [((var name, star def, loc), n)]
-def summarize_var_for_region(var, region, init_OUT=[]):
-    global pred, succ, SUMMARY, DEF, USE, ECHO
+def summarize_var_for_region(var, region, init_OUT=[], everything_is_tainted=False):
+    global pred, succ, SUMMARY, DEF, USE, ECHO, BRANCH, CTRLDEP, tainted_branches
     # set((var name, star def, loc))
     cur_in = set()
+    tmp = set()
     # set((var name, star def, loc))
     gen = set()
+
+    #sys.stderr.write("summarize_var_for_region args:\n")
+    #sys.stderr.write("var: " + str(var) + "\n")
+    #sys.stderr.write("region : " + str(region) + "\n")
+    #sys.stderr.write("init_OUT : " + str(init_OUT) + "\n")
+    #sys.stderr.write("everything_is_tainted : " + str(everything_is_tainted) + "\n")
+
 
     # set(node id)
     changed = all_nodes_for_region(region)
     all_nodes = set(changed)
 
+    echos = set()
+
     # {node -> (var name, star def, loc)}
     OUT = {}
-    for n in changed:
+    for n in all_nodes:
         OUT[n] = set()
 
     for d, n in init_OUT:
         OUT[n].add(d)
 
-    echos = set()
+    if everything_is_tainted:
+        for n in all_nodes:
+            if n in CALLS:
+                tmp_gen, tmp_echos = SUMMARY[CALLS[n]].gen_set_for_var("*")
+                OUT[n].update(tmp_gen)
+                echos.update(tmp_echos)
+            else:
+                OUT[n].update(make_all_defs_live(n))
 
     if var:
         OUT[region[0]].add(var)
@@ -281,28 +344,43 @@ def summarize_var_for_region(var, region, init_OUT=[]):
                 gen.update(tmp_gen)
                 echos.update(tmp_echos)
             IN_minus_KILL(cur_in, CALLS[cur])
-        else:
-            # regular
-            if filter(lambda d: d[0] in USE[cur], cur_in):
-                gen.update(map(
-                        lambda d: (d, (d, cur) in STARDEF, cur),
-                        DEF[cur]))
-                if cur in ECHO:
-                    echos.add(cur)
+        elif filter(lambda d: d[0] in USE[cur], cur_in):
+            # regular statement, and we are using a livedef
+            gen.update(map(
+                    lambda d: (d, (d, cur) in STARDEF, cur),
+                    DEF[cur]))
+            if cur in ECHO:
+                echos.add(cur)
+
+            if BRANCH.get(cur, 0) != 0:
+                if cur not in tainted_branches:
+                    tainted_branches[cur] = 1
+                for n in CTRLDEP[cur]:
+                    if n in ECHO:
+                        echos.add(n)
+
+                    tmp.clear()
+                    if n in CALLS:
+                        tmp_gen, tmp_echos = SUMMARY[CALLS[n]].gen_set_for_var("*")
+                        tmp.update(tmp_gen)
+                        echos.update(tmp_echos)
+                    else:
+                        tmp.update(make_all_defs_live(n))
+                    if tmp - OUT[n]:
+                        OUT[n].update(tmp)
+                        add_succ(n, changed, all_nodes, region)
 
             IN_minus_KILL(cur_in, cur)
+
         cur_in.update(gen)
         if cur_in != OUT[cur]:
             OUT[cur].update(cur_in)
-            if cur != region[1]:
-                changed.update(succ[cur])
-            else:
-                # same hack to handle recursion...
-                changed.update(filter(lambda x: x in all_nodes, succ[cur]))
+            add_succ(cur, changed, all_nodes, region)
 
     return OUT[region[1]], echos
 
 
+tainted_branches = OrderedDict()
 def do_taint_analysis():
     global SOURCE, DEF, STARDEF, CALLEEOF, in_func, function
     tainted_echos = set()
@@ -330,25 +408,25 @@ def do_taint_analysis():
     fd.write("\n".join(map(str, sorted(map(lambda e: id_map[e], tainted_echos)))) + "\n")
     fd.close()
 
+    fd = open("tmp/tainted_branches", "w+")
+    fd.write("\n".join(map(str, sorted(map(lambda e: id_map[e], reversed(tainted_branches))))) + "\n")
+    fd.close()
+
 def init_summarries():
     for (start, end) in function.iteritems():
         s = Summary(start, end)
         SUMMARY[start] = s
 
 def test():
-    fd = open("tmp/func_params.csv", "w+")
+    global SUMMARY
     load_graph()
-    for (start, end) in function.iteritems():
-        s = Summary(start, end)
-        SUMMARY[start] = s
-        fd.write(str(start) + "\t")
-        fd.write(",".join(map(lambda v: var_map[v], s.input_vars)) + "\n")
-    fd.close()
+    init_summarries()
+    SUMMARY[1230].gen_set_for_var("*")
 
-    for i in function.keys():
-        SUMMARY[i].do_it_all()
-    pass
-if __name__ == "__main__":
+def main():
     load_graph()
     init_summarries()
     do_taint_analysis()
+
+if __name__ == "__main__":
+    main()

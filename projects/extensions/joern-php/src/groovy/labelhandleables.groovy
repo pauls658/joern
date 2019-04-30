@@ -101,8 +101,8 @@ class G {
 		g\
 		.V(id)\
 		repeat(
-			out('PARENT_OF').has("type", without(stopTypes))
-		).until(has("type", "AST_VAR").out('PARENT_OF').has("type", "string")).path().toList()
+			out('PARENT_OF')
+		).until(has("type", "AST_VAR").out('PARENT_OF').has("type", "string")).out("PARENT_OF").path().toList()
 
 	}
 
@@ -155,11 +155,11 @@ class G {
 	]
 
 	public HashSet functionCallWhiteList = [
-		"is_object","is_array",	"is_string", "defined", "define", "dirname", "gettype", "trim", "count", "substr", "strlen", "explode", "preg_split", "strtoupper", "strtolower", "array_change_key_case", "stripslashes", "preg_quote", "htmlspecialchars", "sizeof", "mb_convert_encoding", "is_scalar", "implode", "reset", "get_object_vars", "floor", "sprintf", "rtrim", "strtotime", "is_integer", "date", "mktime", "urlencode", "asort", "is_a", "get_class", "intval", "base64_encode", "mb_substr", "mb_strlen", "parse_url", "strtotime", "array_splice", "array_shift", "strrev", "preg_match"
+		"is_object", "is_null", "is_array",	"is_string", "defined", "define", "dirname", "gettype", "trim", "count", "substr", "strlen", "explode", "preg_split", "strtoupper", "strtolower", "array_change_key_case", "stripslashes", "preg_quote", "htmlspecialchars", "sizeof", "mb_convert_encoding", "is_scalar", "implode", "reset", "get_object_vars", "floor", "sprintf", "rtrim", "strtotime", "is_integer", "is_int", "date", "mktime", "urlencode", "asort", "is_a", "get_class", "intval", "base64_encode", "mb_substr", "mb_strlen", "parse_url", "strtotime", "array_splice", "array_shift", "strrev", "preg_match"
 	]
 
-	def secondArgIsNonEmptyString(callNode) {
-		def secondArg = g.V(callNode.id()).out("PARENT_OF").has("type", "AST_ARG_LIST").out("PARENT_OF").has("childnum", 1).next()
+	def nthArgIsNonEmptyString(callNode, arg) {
+		def secondArg = g.V(callNode.id()).out("PARENT_OF").has("type", "AST_ARG_LIST").out("PARENT_OF").has("childnum", arg).next()
 		if (secondArg.value("type").equals("string")) {
 			return !secondArg.value("code").equals("");
 		} else if (secondArg.value("type").equals("AST_ARRAY")) {
@@ -201,9 +201,9 @@ class G {
 				return !(callName in methodCallWhitelist)
 			case "AST_CALL":
 				if (callName.equals("str_replace")) {
-					return !secondArgIsNonEmptyString(callNode)
+					return !nthArgIsNonEmptyString(callNode, 1)
 				} else if (callName.equals("preg_replace")) {
-					return !secondArgIsNonEmptyString(callNode)
+					return !nthArgIsNonEmptyString(callNode, 1)
 				}
 				return !(callName in functionCallWhiteList)
 			case "AST_STATIC_CALL":
@@ -371,20 +371,37 @@ class G {
 	public HashSet typeZeroBuiltInFuncs = [
 		"is_array",
 		"is_object",
-		"is_string",
+		"is_null",
 		"is_bool",
 		"is_numeric",
 		"is_float",
 		"is_integer",
+		"is_int",
+		"version_compare",
 		"is_string",
 		"is_object",
+		"is_readable",
+		"is_dir",
+		"mkdir",
+		"mb_internal_encoding",
+		"unserialize",
+		"fopen",
+		"feof",
+		"fgets",
+		"headers_sent",
+		"sizeof",
+		"copy",
 		"function_exists",
 		"trim",
 		"strlen",
 		"count",
+		"extension_loaded",
 		"is_a",
 		"each",
-		"file_exists"
+		"file_exists",
+		"array_shift",
+		"array_pop",
+		"strtolower"
 	]
 
 	def getFuncType(node) {
@@ -400,7 +417,9 @@ class G {
 				return 0
 			else if (typeZeroBuiltInFuncs.contains(funcName))
 				return 0
-			else if ((funcName.equals("stristr") || funcName.equals("strstr")) && secondArgIsNonEmptyString(node))
+			else if ((funcName in ["stristr", "strstr", "strpos", "substr_count"]) && nthArgIsNonEmptyString(node, 1))
+				return 0
+			else if ((funcName in ["preg_match"]) && nthArgIsNonEmptyString(node, 0)) // regex constant
 				return 0
 			else
 				return 2
@@ -434,18 +453,25 @@ class G {
 		"strtoupper",
 		"substr",
 		"count",
-		"trim"
+		"trim",
+		"strlen"
 	]
 
+	/*
+	This function is called "isVar", but really it tells us if the non-constant side
+	of an equality comparison is acceptable.
+	*/
 	def isVar(node) {
 		def type = node.value("type")
 		switch (type) {
 			case "AST_UNARY_OP":
 				return isVar(getChildren(node)[0])
 			case "AST_CALL":
+			case "AST_METHOD_CALL":
+			case "AST_STATIC_CALL":
 				if (node.value("name") in isVarFuncWhitelist || g.V(node.id()).out("CALLS").toList().size() > 0)
 					return true
-				else if (node.value("name") in ["strstr","stristr"] && secondArgIsNonEmptyString(node))
+				else if (node.value("name") in ["strstr","stristr"] && nthArgIsNonEmptyString(node, 1))
 					return true
 				else
 					return false
@@ -535,17 +561,42 @@ class G {
 	def getSwitchBranchType(node) {
 		return g.V(node.id()).out("PARENT_OF").has("type", "AST_SWITCH_LIST").out("PARENT_OF").out("PARENT_OF").has("childnum", 0).filter{ !isConst(it.get()) && !(it.get().value("type").equals("AST_CALL") && it.get().value("name") in typeZeroBuiltInFuncs) }.hasNext() ? 2 : 0
 	}
-	
+/*
+	def getForLoopType(node) {
+		def exprList = g.V(node.id()).out("PARENT_OF").has("childnum", 0).next()
+		def exprs = g.V(exprList.id()).out("PARENT_OF").toList()
+		if (exprs.size() != 1) 
+			return 2
+
+		if (exprs[0].value("type").equals("AST_ASSIGN")) {
+			def loopVar = g.V(exprs[0].id()).out("PARENT_OF").has("childnum", 0).out("PARENT_OF").toList()
+			if (loopVar.size() == 1 && loopVar[0].value("type").equals("string")) {
+				def loopVarName = loopVar[0].value("code")
+				for (varPath in getVarPaths(g.V(node.id()).out("PARENT_OF").has("type", "AST_STMT_LIST").next())) {
+					if (!vp[-1].value("type").equals("string") || !vp[-1].value("code").equals(loopVarName))
+						continue
+					
+				}
+			} else {
+				return 2
+			}
+		} else {
+			return 2
+		}
+	}
+*/	
 	def getBranchType(node) {
 		// special case 
 		def parent = g.V(node.id()).in("PARENT_OF").next()
 		if (parent.value("type").equals("AST_SWITCH")) {
 			return getSwitchBranchType(parent)
-		}
+		} /*else if (parent.value("type").equals("AST_FOR")) {
+			return getForLoopType(parent)
+		}*/
 		switch(node.value("type")) {
 			case "AST_FOREACH":
 				return 0;
-			case "AST_EXPR_LIST":
+			case "AST_EXPR_LIST": // for (...; i < 0, i > 1;...)
 				def children = getChildren(node)
 				def ret = 0
 				for (child in children) {
@@ -581,6 +632,8 @@ class G {
 			case "AST_PROP": // if ($o->var)
 			case "AST_DIM":
 			case "AST_CONST":
+			case "integer":
+			case "string":
 				return 0;
 			default:
 				return 2;
@@ -651,7 +704,7 @@ class G {
 	int curNode = 0;
 	int prevNode = 0;
 	def loadNodeIds() {
-		def fpath = "/home/brandon/joern/projects/extensions/joern-php/src/datalog/tbranches"
+		def fpath = "/home/brandon/joern/projects/extensions/joern-php/src/summary_analysis/tmp/tainted_branches"
 		File f = new File(fpath)
 		def lines = f.readLines()
 		for (l in lines) {

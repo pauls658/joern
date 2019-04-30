@@ -412,7 +412,8 @@ def make_copied_cfg(g, func_entry, max_depth, copied_cfg, call_stack=OrderedDict
     id_translation[func_exit] = idc
     id_map[idc] = func_exit
     idc += 1
-    
+
+
     last_created[func_entry] = (id_translation[func_entry], id_translation[func_exit])
     assert func_entry not in call_stack
     call_stack[func_entry] = (id_translation[func_entry], id_translation[func_exit])
@@ -452,7 +453,7 @@ def make_copied_cfg(g, func_entry, max_depth, copied_cfg, call_stack=OrderedDict
                     # regular function call
                     call_entry, call_exit = make_copied_cfg(g, s, max_depth, copied_cfg)
                     summary_id = idc
-                    id_map[summary_id] = s
+                    id_map[summary_id] = g.nodes[cur]["call_id"]
                     idc += 1
                     add_graph_edge(id_translation[cur], summary_id, copied_cfg)
                     add_graph_edge(summary_id, id_translation[arg_exit], copied_cfg)
@@ -475,6 +476,7 @@ def make_copied_cfg(g, func_entry, max_depth, copied_cfg, call_stack=OrderedDict
                 # either case, do not continue
                 add_graph_edge(id_translation[cur], id_translation[s], copied_cfg)
 
+    copied_cfg.nodes[id_translation[func_entry]]["exit"] = id_translation[func_exit]
     if id_translation[func_entry] not in funcs_visited:
         funcs_visited.add(id_translation[func_entry])
         write_datalog_function(id_translation[func_entry], id_translation[func_exit])
@@ -609,7 +611,7 @@ def write_handleable_info():
     fd = open("tmp/handleable.csv", "w+")
     
     for new, orig in id_map.iteritems():
-        fd.write("%d,%d\n" % (new, g.nodes[orig]["handleable"]))
+        fd.write("%d,%d\n" % (new, g.nodes[orig].get("handleable", 0)))
     fd.close()
 
 indexes = {}
@@ -915,15 +917,17 @@ def write_control_dependencies(copied_cfg):
     # reverse_cfg is a "view" of copied_cfg. This does
     # not change anything in copied_cfg.
     reverse_cfg = copied_cfg.reverse()
-    # 1 is always the id of the exit node
-    dfs = nx.dominance_frontiers(reverse_cfg, 1)
-
     ctrldeps = defaultdict(list)
-    for n, df in dfs.iteritems():
-        for d in df:
-            ctrldeps[d].append(n)
+    for entry in filter(lambda n: g.nodes[id_map[n]]["type"] == "CFG_FUNC_ENTRY", reverse_cfg.nodes()):
+        exit = reverse_cfg.nodes[entry]["exit"]
 
-    #ctrldeps = trans_closure(ctrldeps)
+        dfs = nx.dominance_frontiers(reverse_cfg, exit)
+
+        for n, df in dfs.iteritems():
+            for d in df:
+                ctrldeps[d].append(n)
+
+    ctrldeps = trans_closure(ctrldeps)
 
     for d, deps in ctrldeps.iteritems():
         for dep in deps:
@@ -954,7 +958,7 @@ def arrays(args):
     with open("tmp/cfg_exit", "w+") as fd:
         fd.write(str(g.nodes[entry]["exit_id"]))
     add_def_use_to_graph(copied_cfg)
-    preprocesses_graph(copied_cfg)
+    #preprocesses_graph(copied_cfg)
     write_control_dependencies(copied_cfg)
     write_branches(copied_cfg)
     array_indexes = collect_array_indexes(copied_cfg)
