@@ -373,7 +373,7 @@ def summarize_var_for_region(var, region, init_OUT=[], everything_is_tainted=Fal
                         OUT[n].update(tmp)
                         add_succ(n, changed, all_nodes, region)
 
-            IN_minus_KILL(cur_in, cur)
+        IN_minus_KILL(cur_in, cur)
 
         cur_in.update(gen)
         if cur_in != OUT[cur]:
