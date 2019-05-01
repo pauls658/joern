@@ -68,13 +68,14 @@ class Summary():
         global var_map
         for v in self.input_vars:
             if var_map[v].startswith(Symbol.field_prefix):
-                in_var = (v, True, self.start)
+                in_var = (v, True, self.start, "")
             elif var_map[v].endswith(Symbol.unknown_index):
-                self.gen_set_for_var((v, True, self.start))
-                in_var = (v, False, self.start)
+                self.gen_set_for_var((v, True, self.start, ""))
+                in_var = (v, False, self.start, "")
             else:
-                in_var = (v, False, self.start)
+                in_var = (v, False, self.start, "")
             self.gen_set_for_var(in_var)
+        #self.gen_set_for_var("*")
 
     def print_summarries_for_vars(self):
         global var_map
@@ -276,20 +277,21 @@ def add_succ(cur, changed, all_nodes, region):
 
 def make_all_defs_live(n):
     global DEF, STARDEF
+    raise NotImplementedError()
     tmp = set()
     for d in DEF[n]:
         tmp.add((d, (d, n) in STARDEF, n))
     return tmp
 
-# var: (var name, star def, loc) OR None
+# var: (var name, star def, loc, call string) OR None
 # region: (region start, region end)
-# init_OUT: [((var name, star def, loc), n)]
+# init_OUT: [((var name, star def, loc, call string), n)]
 def summarize_var_for_region(var, region, init_OUT=[], everything_is_tainted=False):
     global pred, succ, SUMMARY, DEF, USE, ECHO, BRANCH, CTRLDEP, tainted_branches
-    # set((var name, star def, loc))
+    # set((var name, star def, loc, call string))
     cur_in = set()
     tmp = set()
-    # set((var name, star def, loc))
+    # set((var name, star def, loc, call string))
     gen = set()
 
     #sys.stderr.write("summarize_var_for_region args:\n")
@@ -305,7 +307,7 @@ def summarize_var_for_region(var, region, init_OUT=[], everything_is_tainted=Fal
 
     echos = set()
 
-    # {node -> (var name, star def, loc)}
+    # {node -> (var name, star def, loc, call string)}
     OUT = {}
     for n in all_nodes:
         OUT[n] = set()
@@ -341,18 +343,18 @@ def summarize_var_for_region(var, region, init_OUT=[], everything_is_tainted=Fal
             # function summary
             for input_var in cur_in:
                 tmp_gen, tmp_echos = SUMMARY[CALLS[cur]].gen_set_for_var(input_var)
-                gen.update(tmp_gen)
+                gen.update(map(lambda d: (d[0], d[1], d[2], str(cur) + ":" + d[3]), tmp_gen))
                 echos.update(tmp_echos)
             IN_minus_KILL(cur_in, CALLS[cur])
         elif filter(lambda d: d[0] in USE[cur], cur_in):
             # regular statement, and we are using a livedef
             gen.update(map(
-                    lambda d: (d, (d, cur) in STARDEF, cur),
+                    lambda d: (d, (d, cur) in STARDEF, cur, ""),
                     DEF[cur]))
             if cur in ECHO:
                 echos.add(cur)
 
-            if BRANCH.get(cur, 0) != 0:
+            if BRANCH.get(cur, 0) != 0 and False: # disable implicit flows temporarily
                 if cur not in tainted_branches:
                     tainted_branches[cur] = 1
                 for n in CTRLDEP[cur]:
@@ -361,6 +363,7 @@ def summarize_var_for_region(var, region, init_OUT=[], everything_is_tainted=Fal
 
                     tmp.clear()
                     if n in CALLS:
+                        # TODO: prepend call site
                         tmp_gen, tmp_echos = SUMMARY[CALLS[n]].gen_set_for_var("*")
                         tmp.update(tmp_gen)
                         echos.update(tmp_echos)
@@ -377,7 +380,7 @@ def summarize_var_for_region(var, region, init_OUT=[], everything_is_tainted=Fal
             OUT[cur].update(cur_in)
             add_succ(cur, changed, all_nodes, region)
 
-    return OUT[region[1]], echos
+    return map(lambda d: (d[0], d[1], d[2], str(region[0]) + "," + d[3]), OUT[region[1]]), echos
 
 
 tainted_branches = OrderedDict()
@@ -391,7 +394,7 @@ def do_taint_analysis():
         if func not in work:
             work[func] = set()
         for d in DEF[s]:
-            work[func].add(((d, (d, s) in STARDEF, s), s))
+            work[func].add(((d, (d, s) in STARDEF, s, ""), s))
 
     while work:
         func, init_OUT = work.popitem()
@@ -421,7 +424,8 @@ def test():
     global SUMMARY
     load_graph()
     init_summarries()
-    SUMMARY[1230].gen_set_for_var("*")
+    SUMMARY[4888].do_it_all()
+    pass
 
 def main():
     load_graph()
