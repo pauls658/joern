@@ -4,9 +4,10 @@ from common import *
 
 id_map = {}
 rev_id_map = defaultdict(list)
-post_dom_tree = defaultdict(list)
+var_map = None
+rev_var_map = None
 def load_graph():
-    global id_map, post_dom_tree
+    global id_map, rev_id_map, ctx_id_map, var_map, rev_var_map
     g = nx.MultiDiGraph()
     c_nodes = load_cypher_graph_nodes()
 
@@ -15,42 +16,26 @@ def load_graph():
         new, orig = map(int, line.split(","))
         id_map[new] = orig
         rev_id_map[orig].append(new)
-        g.add_node(new)
-        g.nodes[new]["has_concat"] = c_nodes[orig]["has_concat"]
-        g.nodes[new]["funcid"] = c_nodes[orig]["funcid"]
     fd.close()
 
-    fd = open("tmp/handleable.csv", "r")
+    var_map, rev_var_map = load_var_map()
+
+    fd = open("tmp/data_deps", "r")
     for line in fd:
-        new, handleable = map(int, line.split(","))
-        handleable = bool(handleable)
-        g.nodes[new]["handleable"] = handleable
+        pieces = map(lambda s: s.strip(), line.split("\t"))
+        use_ctx = (pieces[0], int(pieces[1]))
+        h = c_nodes[id_map[use_ctx[1]]]["handleable"]
+        fid = c_nodes[id_map[use_ctx[1]]]["funcid"]
+        g.add_node(use_ctx, handleable=h, funcid=fid)
+        pieces = pieces[2:]
+        for i in range(0, len(pieces), 3):
+            def_ctx = (pieces[i+2], int(pieces[i+1]))
+            h = c_nodes[id_map[def_ctx[1]]]["handleable"]
+            fid = c_nodes[id_map[def_ctx[1]]]["funcid"]
+            g.add_node(def_ctx, handleable=h, funcid=fid)
+            g.add_edge(def_ctx, use_ctx, label="REACHES", var=int(pieces[i]))
     fd.close()
 
-    fd = open("tmp/cfg_exit", "r")
-    # get the traslated id of cfg exit
-    cfg_exit = rev_id_map[int(fd.read().strip())][0]
-    fd.close()
-
-    fd = open("tmp/edge.csv", "r")
-    for line in fd:
-        start, end = map(int, line.split("\t"))
-        # reverse the direction right now to compute
-        # the post dominators
-        g.add_edge(end, start, label="FLOWS_TO")
-    fd.close()
-
-    # Need to compute this before we add REACHES edges.
-    # reverse the order of the dict so we can know who
-    # is post dominated by a given node
-    for k, v in nx.immediate_dominators(g, cfg_exit).iteritems():
-        post_dom_tree[v].append(k)
-
-    fd = open("datadep.csv", "r")
-    for line in fd:
-        d, use, var_id = map(int, line.split("\t"))
-        g.add_edge(d, use, label="REACHES", var=var_id)
-    fd.close()
 
     return g
 
@@ -66,7 +51,7 @@ def post_dominates(n):
         work.extend(post_dom_tree[cur])
     return post_dominates
 
-def instr_analysis(g, pdoms, cur, fid, visited):
+def instr_analysis(g, cur, fid, visited):
     preds = filter(
             lambda (s,e,d): d["label"] == "REACHES",
             g.in_edges([cur], data=True))
@@ -80,7 +65,7 @@ def instr_analysis(g, pdoms, cur, fid, visited):
 
     if not preds:
         return []
-    elif all([pred in pdoms and  
+    elif all([
              g.node[pred]["handleable"]
              for pred in preds]):
         # if all preds are post dominated by the sink
@@ -88,7 +73,7 @@ def instr_analysis(g, pdoms, cur, fid, visited):
         # another step back
         pts = []
         for p in preds:
-            pts.extend(instr_analysis(g, pdoms, p, fid, visited))
+            pts.extend(instr_analysis(g, p, fid, visited))
         if any([g.node[i]["funcid"] != fid for i in pts]):
             return [cur]
         else:
@@ -98,9 +83,8 @@ def instr_analysis(g, pdoms, cur, fid, visited):
 
 
 def find_instrumentation_point2(g, sink):
-    pdoms = post_dominates(sink)
     visited = set([sink])
-    instr_points = instr_analysis(g, pdoms, sink, g.node[sink]["funcid"], visited)
+    instr_points = instr_analysis(g, sink, g.node[sink]["funcid"], visited)
 
     # grab the tainted variable names
     ret = defaultdict(list)
@@ -175,16 +159,21 @@ def test(sink):
 def main():
     global id_map, rev_id_map
     g = load_graph()
-    tainted = load_souffle_res()
-    var_map, _ = load_var_map()
-    # tainted sink -> [instr points]
+
+    tainted_echos = set()
+    fd = open("tmp/tainted_echos", "rb")
+    for l in fd:
+        pieces = l.strip().split("\t")
+        tainted_echos.add((pieces[0], int(pieces[1])))
+    fd.close()
+
     instr_result = defaultdict(lambda: defaultdict(set))
     ccfg_ids = defaultdict(list)
-    for sink in tainted:
-        for i, vs in find_instrumentation_point2(g, sink).iteritems():
-            instr_i = id_map[i]
-            ccfg_ids[instr_i].append(i)
-            instr_result[id_map[sink]][instr_i].update(vs)
+    for sink in tainted_echos:
+        for ctx, vs in find_instrumentation_point2(g, sink).iteritems():
+            instr_i = id_map[ctx[1]]
+            ccfg_ids[instr_i].append(ctx[1])
+            instr_result[id_map[sink[1]]][instr_i].update(vs)
 
     for sink in sorted(instr_result.keys()):
         line = str(sink) + ":\n"

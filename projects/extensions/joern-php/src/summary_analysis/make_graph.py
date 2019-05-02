@@ -207,7 +207,7 @@ def add_graph_edge(start, end, copied_cfg):
 
 def write_datalog_function(start, end):
     global datalog_function_fd, g, id_map
-    datalog_function_fd.write("%d\t%d\t%d\n" % (start, end, g.nodes[id_map[start]]["funcid"]))
+    datalog_function_fd.write("%d\t%d\t%d\t%s\n" % (start, end, g.nodes[id_map[start]]["funcid"], g.nodes[id_map[start]]["name"]))
 
 def write_datalog_call(call_site, call_target):
     global datalog_call_fd
