@@ -309,11 +309,7 @@ def add_succ(cur, changed, all_nodes, region):
 
 def make_all_defs_live(n):
     global DEF, STARDEF
-    raise NotImplementedError()
-    tmp = set()
-    for d in DEF[n]:
-        tmp.add((d, (d, n) in STARDEF, n))
-    return tmp
+    return map(lambda d: (d, (d, n) in STARDEF, n, ""), DEF[n])
 
 # ctx operations
 # ctx format: 0,[<call site>:<func entry>,]*
@@ -394,9 +390,12 @@ def summarize_var_for_region(var, region, init_OUT=[], everything_is_tainted=Fal
     if everything_is_tainted:
         for n in all_nodes:
             if n in CALLS:
-                tmp_gen, tmp_echos = SUMMARY[CALLS[n]].gen_set_for_var("*")
-                OUT[n].update(tmp_gen)
-                echos.update(tmp_echos)
+                this_call_site = str(n) + ":" + str(CALLS[n]) + ","
+                tmp_gen, tmp_echos, tmp_du_pairs = SUMMARY[CALLS[n]].gen_set_for_var("*", call_string + this_call_site)
+                OUT[n].update(map(lambda d: (d[0], d[1], d[2], this_call_site + d[3]), tmp_gen))
+                du_pairs.update(map(lambda (d, l): ((d[0], d[1], d[2], this_call_site + d[3]), (l[0], this_call_site + l[1])), tmp_du_pairs))
+                for tmp_e in tmp_echos:
+                    echos.add((this_call_site + tmp_e[0], tmp_e[1]))
             else:
                 OUT[n].update(make_all_defs_live(n))
 
@@ -438,7 +437,7 @@ def summarize_var_for_region(var, region, init_OUT=[], everything_is_tainted=Fal
                 if cur in ECHO:
                     echos.add(("", cur))
 
-                if BRANCH.get(cur, 0) != 0 and False: # disable implicit flows temporarily
+                if BRANCH.get(cur, 0) != 0:
                     if cur not in tainted_branches:
                         tainted_branches[cur] = 1
                     for n in CTRLDEP[cur]:
@@ -447,10 +446,12 @@ def summarize_var_for_region(var, region, init_OUT=[], everything_is_tainted=Fal
 
                         tmp.clear()
                         if n in CALLS:
-                            # TODO: prepend call site
-                            tmp_gen, tmp_echos = SUMMARY[CALLS[n]].gen_set_for_var("*")
-                            tmp.update(tmp_gen)
-                            echos.update(tmp_echos)
+                            this_call_site = str(n) + ":" + str(CALLS[n]) + ","
+                            tmp_gen, tmp_echos, tmp_du_pairs = SUMMARY[CALLS[n]].gen_set_for_var("*", call_string + this_call_site)
+                            tmp.update(map(lambda d: (d[0], d[1], d[2], this_call_site + d[3]), tmp_gen))
+                            du_pairs.update(map(lambda (d, l): ((d[0], d[1], d[2], this_call_site + d[3]), (l[0], this_call_site + l[1])), tmp_du_pairs))
+                            for tmp_e in tmp_echos:
+                                echos.add((this_call_site + tmp_e[0], tmp_e[1]))
                         else:
                             tmp.update(make_all_defs_live(n))
                         if tmp - OUT[n]:
