@@ -19,6 +19,7 @@ def load_graph():
     fd.close()
 
     var_map, rev_var_map = load_var_map()
+    var_map["*"] = "*"
 
     fd = open("tmp/data_deps", "r")
     for line in fd:
@@ -83,6 +84,9 @@ def instr_analysis(g, cur, fid, visited):
 
 
 def find_instrumentation_point2(g, sink):
+    if sink not in g:
+        return {sink : ["*"]}
+
     visited = set([sink])
     instr_points = instr_analysis(g, sink, g.node[sink]["funcid"], visited)
 

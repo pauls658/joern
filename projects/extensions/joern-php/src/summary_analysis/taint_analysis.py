@@ -1,4 +1,5 @@
 from collections import defaultdict, OrderedDict
+from itertools import imap, ifilter
 from common import *
 import re, sys
 from make_graph import Symbol
@@ -74,11 +75,11 @@ class Summary():
             if var_map[v].startswith(Symbol.field_prefix):
                 in_var = (v, True, self.start, "")
             elif var_map[v].endswith(Symbol.unknown_index):
-                self.gen_set_for_var((v, True, self.start, ""))
+                self.gen_set_for_var((v, True, self.start, ""), "")
                 in_var = (v, False, self.start, "")
             else:
                 in_var = (v, False, self.start, "")
-            self.gen_set_for_var(in_var)
+            self.gen_set_for_var(in_var, "")
         #self.gen_set_for_var("*")
 
     def print_summarries_for_vars(self):
@@ -156,9 +157,9 @@ class Summary():
                     else:
                         DEF[self.start].add(live_var[0])
 
-            ret = (map(lambda d: live_var if d == star_live_var else d, self.summarries_for_vars[index]),
+            ret = (imap(lambda d: live_var if d == star_live_var else d, self.summarries_for_vars[index]),
                    self.tainted_echos_for_vars[index],
-                   map(lambda (d, u): (live_var, u) if d == star_live_var else (d, u), self.du_pairs_for_vars[index]))
+                   imap(lambda (d, u): (live_var, u) if d == star_live_var else (d, u), self.du_pairs_for_vars[index]))
             #du_pairs = map(lambda (d, u): (live_var, u) if d == star_live_var else (d, u), self.du_pairs_for_vars[index])
 
         #output_du_pairs(du_pairs, call_string)
@@ -288,7 +289,7 @@ def all_nodes_for_region(region):
 def IN_minus_KILL(in_set, n):
     global DEF, STARDEF, KILL, NOKILL
     in_set.difference_update(
-            filter( 
+            filter(
                 # lambda should match defs we _want_
                 # to remove
                 lambda d: n not in NOKILL and \
@@ -305,11 +306,11 @@ def add_succ(cur, changed, all_nodes, region):
         changed.update(succ[cur])
     else:
         # same hack to handle recursion...
-        changed.update(filter(lambda x: x in all_nodes, succ[cur]))
+        changed.update(ifilter(lambda x: x in all_nodes, succ[cur]))
 
 def make_all_defs_live(n):
     global DEF, STARDEF
-    return map(lambda d: (d, (d, n) in STARDEF, n, ""), DEF[n])
+    return imap(lambda d: (d, (d, n) in STARDEF, n, ""), DEF[n])
 
 # ctx operations
 # ctx format: 0,[<call site>:<func entry>,]*
@@ -331,7 +332,7 @@ def all_contexts(cur_ctx="0,"):
 def contexts_of_stmt(stmt):
     global in_func, all_ctx
     func = in_func[stmt]
-    return filter(lambda ctx: (":" + ctx).endswith(":" + str(func) + ","), all_ctx)
+    return ifilter(lambda ctx: (":" + ctx).endswith(":" + str(func) + ","), all_ctx)
 
 # du_pairs: set(((var name, star def, loc, top half of ctx w/o top-most call), (stmt, ctx)))
 # ctx: bottom half of ctx
@@ -355,7 +356,7 @@ def output_du_pairs(du_pairs, ctx):
 #   [((def var, star def, loc, ctx), (loc, ctx))]
 def summarize_var_for_region(var, region, init_OUT=[], everything_is_tainted=False, call_string=None):
     global pred, succ, SUMMARY, DEF, USE, ECHO, BRANCH, CTRLDEP, tainted_branches
-    if not call_string:
+    if call_string is None:
         raise Exception("call string was not defined")
 
     # set((var name, star def, loc, call string))
@@ -364,11 +365,13 @@ def summarize_var_for_region(var, region, init_OUT=[], everything_is_tainted=Fal
     # set((var name, star def, loc, call string))
     gen = set()
 
-    # sys.stderr.write("summarize_var_for_region args:\n")
-    # sys.stderr.write("var: " + str(var) + "\n")
-    # sys.stderr.write("region : " + str(region) + "\n")
-    # sys.stderr.write("init_OUT : " + str(init_OUT) + "\n")
-    # sys.stderr.write("everything_is_tainted : " + str(everything_is_tainted) + "\n")
+    #sys.stderr.write("summarize_var_for_region args:\n")
+    #sys.stderr.write("var: " + str(var) + "\n")
+    #sys.stderr.write("region : " + str(region) + "\n")
+    #sys.stderr.write("init_OUT : " + str(init_OUT) + "\n")
+    #sys.stderr.write("everything_is_tainted : " + str(everything_is_tainted) + "\n")
+    #sys.stderr.write("call_string : " + str(call_string) + "\n")
+    #print_ctx(call_string)
 
 
     # set(node id)
@@ -392,8 +395,8 @@ def summarize_var_for_region(var, region, init_OUT=[], everything_is_tainted=Fal
             if n in CALLS:
                 this_call_site = str(n) + ":" + str(CALLS[n]) + ","
                 tmp_gen, tmp_echos, tmp_du_pairs = SUMMARY[CALLS[n]].gen_set_for_var("*", call_string + this_call_site)
-                OUT[n].update(map(lambda d: (d[0], d[1], d[2], this_call_site + d[3]), tmp_gen))
-                du_pairs.update(map(lambda (d, l): ((d[0], d[1], d[2], this_call_site + d[3]), (l[0], this_call_site + l[1])), tmp_du_pairs))
+                OUT[n].update(imap(lambda d: (d[0], d[1], d[2], this_call_site + d[3]), tmp_gen))
+                du_pairs.update(imap(lambda (d, l): ((d[0], d[1], d[2], this_call_site + d[3]), (l[0], this_call_site + l[1])), tmp_du_pairs))
                 for tmp_e in tmp_echos:
                     echos.add((this_call_site + tmp_e[0], tmp_e[1]))
             else:
@@ -416,22 +419,23 @@ def summarize_var_for_region(var, region, init_OUT=[], everything_is_tainted=Fal
         gen.clear()
         if cur in CALLS:
             # function summary
-            for iv in cur_in:
+            summary = SUMMARY[CALLS[cur]]
+            for iv in ifilter(lambda v: v[0] in summary.input_vars, cur_in):
                 this_call_site = str(cur) + ":" + str(CALLS[cur]) + ","
-                tmp_gen, tmp_echos, tmp_du_pairs = SUMMARY[CALLS[cur]].gen_set_for_var(iv, call_string + this_call_site)
-                gen.update(map(lambda d: (d[0], d[1], d[2], this_call_site + d[3]) if d != iv else d, tmp_gen))
-                du_pairs.update(map(lambda (d, l): ((d[0], d[1], d[2], this_call_site + d[3]) if d != iv else d, (l[0], this_call_site + l[1])), tmp_du_pairs))
+                tmp_gen, tmp_echos, tmp_du_pairs = summary.gen_set_for_var(iv, call_string + this_call_site)
+                gen.update(imap(lambda d: (d[0], d[1], d[2], this_call_site + d[3]) if d != iv else d, tmp_gen))
+                du_pairs.update(imap(lambda (d, l): ((d[0], d[1], d[2], this_call_site + d[3]) if d != iv else d, (l[0], this_call_site + l[1])), tmp_du_pairs))
                 for tmp_e in tmp_echos:
                     echos.add((this_call_site + tmp_e[0], tmp_e[1]))
             IN_minus_KILL(cur_in, CALLS[cur])
         else:
-            used_defs = filter(lambda d: d[0] in USE[cur], cur_in)
+            used_defs = ifilter(lambda d: d[0] in USE[cur], cur_in)
             if used_defs:
                 # regular statement, and we are using a livedef
                 # first add the du pairs
-                du_pairs.update(map(lambda d: (d, (cur, "")), used_defs))
+                du_pairs.update(imap(lambda d: (d, (cur, "")), used_defs))
 
-                gen.update(map(
+                gen.update(imap(
                         lambda d: (d, (d, cur) in STARDEF, cur, ""),
                         DEF[cur]))
                 if cur in ECHO:
@@ -448,8 +452,8 @@ def summarize_var_for_region(var, region, init_OUT=[], everything_is_tainted=Fal
                         if n in CALLS:
                             this_call_site = str(n) + ":" + str(CALLS[n]) + ","
                             tmp_gen, tmp_echos, tmp_du_pairs = SUMMARY[CALLS[n]].gen_set_for_var("*", call_string + this_call_site)
-                            tmp.update(map(lambda d: (d[0], d[1], d[2], this_call_site + d[3]), tmp_gen))
-                            du_pairs.update(map(lambda (d, l): ((d[0], d[1], d[2], this_call_site + d[3]), (l[0], this_call_site + l[1])), tmp_du_pairs))
+                            tmp.update(imap(lambda d: (d[0], d[1], d[2], this_call_site + d[3]), tmp_gen))
+                            du_pairs.update(imap(lambda (d, l): ((d[0], d[1], d[2], this_call_site + d[3]), (l[0], this_call_site + l[1])), tmp_du_pairs))
                             for tmp_e in tmp_echos:
                                 echos.add((this_call_site + tmp_e[0], tmp_e[1]))
                         else:
@@ -494,10 +498,13 @@ def do_taint_analysis():
     # should include the func
     while work:
         ctx, init_OUT = work.popitem(last=False)
+        sys.stderr.write("Processing: ")
+        print_ctx(ctx)
+        sys.stderr.write("Remaining items: " + str(len(work)) + "\n")
         top_ctx = get_top_ctx(ctx)
         func = int(top_ctx.split(":")[-1])
         gen, tmp_echos, du_pairs = summarize_var_for_region(None, (func, function[func]), init_OUT=init_OUT, call_string=ctx)
-        tainted_echos.update(map(lambda e: (ctx + e[0], e[1]), tmp_echos))
+        tainted_echos.update(imap(lambda e: (ctx + e[0], e[1]), tmp_echos))
 
         output_du_pairs(du_pairs, ctx)
 
@@ -508,7 +515,7 @@ def do_taint_analysis():
             next_ctx_call_site = int(get_top_ctx(ctx).split(":")[0])
             if next_ctx not in work:
                 work[next_ctx] = set()
-            work[next_ctx].update(map(lambda d: ((d[0], d[1], d[2], top_ctx + "," + d[3]), next_ctx_call_site), gen))
+            work[next_ctx].update(imap(lambda d: ((d[0], d[1], d[2], top_ctx + "," + d[3]), next_ctx_call_site), gen))
 
     fd = open("tmp/tainted_echos", "w+")
     for e in tainted_echos:
@@ -536,19 +543,16 @@ def write_data_deps():
     fd.close()
 
 def print_ctx(ctx):
-    print ",".join(map(lambda x: funcnames[int(x.split(":")[-1])], ctx.split(",")[:-1]))
+    sys.stderr.write(",".join(map(lambda x: funcnames[int(x.split(":")[-1])], ctx.split(",")[:-1])) + "\n")
 
 def test():
     global SUMMARY, function, SOURCE, funcnames
     load_graph()
     all_contexts()
     init_summarries()
-    tainted_ctxs = defaultdict(list)
-    for s in SOURCE:
-        tainted_ctxs[s].extend(contexts_of_stmt(s))
-    for s in tainted_ctxs:
-        for ctx in tainted_ctxs[s]:
-            print_ctx(ctx)
+    for i, start in enumerate(function.keys()):
+        sys.stderr.write("Summarizing " + str(i) + " of " + str(len(function)) + " functions.\n")
+        SUMMARY[start].do_it_all()
     pass
 
 def main():
