@@ -337,6 +337,8 @@ def summarize_var_for_region(var, region, init_OUT=[], everything_is_tainted=Fal
 
     if everything_is_tainted:
         for n in all_nodes:
+            if n == region[0] or n == region[1]:
+                continue # these aren't real defs
             if n in CALLS:
                 tmp_gen, tmp_echos = SUMMARY[CALLS[n]].gen_set_for_var("*")
                 OUT[n].update(tmp_gen)
@@ -381,7 +383,7 @@ def summarize_var_for_region(var, region, init_OUT=[], everything_is_tainted=Fal
                 if cur in ECHO:
                     echos.add(cur)
 
-                if BRANCH.get(cur, 0) != 0 and False:
+                if BRANCH.get(cur, 0) != 0:
                     if cur not in tainted_branches:
                         tainted_branches[cur] = 1
                     for n in CTRLDEP[cur]:
@@ -409,13 +411,52 @@ def summarize_var_for_region(var, region, init_OUT=[], everything_is_tainted=Fal
 
     return OUT[region[1]], echos, is_safe
 
+def label_transitive_handleable():
+    global function, handleable, USE, pred, CALLS, SUMMARY
+    for entry in function:
+        nodes = all_nodes_for_region((entry, function[entry]))
+        work = []
+        for n in nodes:
+            if n in CALLS:
+                for v in tainted_params_for_call_site[n]:
+                    if not SUMMARY[CALLS[n]].is_input_var_safe[v[0]]:
+                        work.append((n, v[0]))
+            else:
+                if not handleable[n]:
+                    work.extend(map(lambda v: (n, v), USE[n]))
+
+        visited = set()
+        while work:
+            cur = work.pop()
+            if cur in visited:
+                continue
+            visited.add(cur)
+
+            if cur[0] in CALLS:
+                s = SUMMARY[CALLS[cur[0]]]
+                for v in tainted_params_for_call_site[cur[0]]:
+                    if var_map[v[0]][0] not in "0987654321":
+                        continue # we don't consider instrumenting fields or globals anyway
+                    if filter(lambda v: v[0] == cur[1], s.summarries_for_vars[v]):
+                        arg_def = find_arg_def(cur[0], v[0])
+                        handleable[arg_def] = False
+                        for use_var in USE[arg_def]:
+                            work.append((cur[0], use_var))
+
+            elif cur[1] in DEF[cur[0]]:
+                for v in DEF[cur[0]]:
+                    work.append((cur[0], v))
+                    handleable[cur[0]] = False
+
+            work.extend(map(lambda p: (p, cur[1]), pred[cur[0]]))
+
 def find_arg_def(call_site, var):
     global pred, DEF
     steps = 0
     cur = call_site
     while steps < 10:
         cur = pred[cur]
-        assert len(cur) == 1
+        if len(cur) != 1: return -1
         cur = cur[0]
         if var in DEF[cur]:
             return cur
@@ -425,7 +466,7 @@ def find_arg_def(call_site, var):
 
 def find_all_defs(stmt, use_var):
     global CALLS, DEF, tainted_vars_for_stmt, in_func, function
-    global var_map, tainted_params_for_call_site, pred
+    global var_map, tainted_params_for_call_site, pred, handleable
     visited = set()
     work = []
     work.extend(pred[stmt])
@@ -442,18 +483,26 @@ def find_all_defs(stmt, use_var):
             if pieces[0].isdigit() and pieces[1] == "ret" and int(pieces[0]) == funcids[CALLS[cur]]:
                 for v in tainted_params_for_call_site[cur]:
                     if filter(lambda v: v[0] == use_var, s.summarries_for_vars[v]):
-                        if s.is_input_var_safe[v[0]]:
-                            ret.add(find_arg_def(cur, v[0]))
+                        if s.is_input_var_safe[v[0]] and not var_map[v[0]].startswith("field_prefix"):
+                            arg_def = find_arg_def(cur, v[0])
+                            if arg_def != -1:
+                                ret.add(find_arg_def(cur, v[0]))
+                            else:
+                                ret.add(-1)
                         else:
                             ret.add(-1)
             else:
                 for v in tainted_params_for_call_site[cur]:
                     if filter(lambda v: v[0] == use_var, s.summarries_for_vars[v]):
                         return set([-1])
+
                 work.extend(pred[cur])
         else:
             if use_var in DEF[cur] and cur != in_func[cur]:
                 ret.add(cur)
+            elif use_var in USE[cur] and not handleable[cur]:
+                # oh no, we might break things
+                return set([-1])
             else:
                 work.extend(pred[cur])
         pass
@@ -475,32 +524,30 @@ def find_all_defs(stmt, use_var):
 #        else:
 #            break
 #    return defs, fail
-#
+
 def find_instr_point(stmt, visited):
-    global handleable
-
-    data_preds = set()
+    global handleable, tainted_vars_for_stmt
+    ret = []
     for v in tainted_vars_for_stmt[stmt]:
-        tmp = find_all_defs(stmt, v)
-        data_preds.update(tmp)
+        data_preds = filter(lambda p: tainted_vars_for_stmt[p], find_all_defs(stmt, v))
 
-    if not data_preds:
-        return [stmt]
+        if not data_preds:
+            ret.append((stmt, v))
+            continue
 
-    data_preds = filter(lambda p: p not in visited, data_preds)
-    visited.update(filter(lambda p: p != -1, data_preds))
+        data_preds = filter(lambda p: p not in visited, data_preds)
+        visited.update(filter(lambda p: p != -1, data_preds))
 
-    if not data_preds:
-        return []
-    elif all([handleable[n] for n in data_preds]):
-        instr_pts = []
-        for n in data_preds:
-            instr_pts.extend(find_instr_point(n, visited))
-        return instr_pts
-    else:
-        # visited should only contain nodes we have "covered"
-        visited.difference_update(data_preds)
-        return [stmt]
+        if not data_preds:
+            continue
+        elif all([handleable[n] for n in data_preds]):
+            for n in data_preds:
+                ret.extend(find_instr_point(n, visited))
+        else:
+            # visited should only contain nodes we have "covered"
+            visited.difference_update(data_preds)
+            ret.append((stmt, v))
+    return ret
 
 def find_instr_points(tainted_echos):
     ret = {}
@@ -513,7 +560,7 @@ def write_instr_pts(instr_pts):
     for (e, pts) in instr_pts.iteritems():
         print str(id_map[e]) + ":"
         for pt in pts:
-            print "\t" + str(id_map[pt]) + ": " + ",".join(map(lambda v: var_map[v], tainted_vars_for_stmt[pt]))
+            print "\t" + str(id_map[pt[0]]) + ": " + var_map[pt[1]]
 
 tainted_branches = OrderedDict()
 def do_taint_analysis():
@@ -564,6 +611,7 @@ def main():
     load_graph()
     init_summarries()
     tainted_echos = do_taint_analysis()
+    label_transitive_handleable()
     instr_pts = find_instr_points(tainted_echos)
     write_instr_pts(instr_pts)
     pass
